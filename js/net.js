@@ -3,12 +3,16 @@
   'use strict';
 
   var cfg = window.GOLF_CONFIG;
-  firebase.initializeApp(cfg.firebase);
-  var auth = firebase.auth();
-  var db = firebase.database();
-  if (cfg.useEmulators) {
-    auth.useEmulator('http://127.0.0.1:9099', { disableWarnings: true });
-    db.useEmulator('127.0.0.1', 9000);
+  var configured = cfg.firebase.apiKey.indexOf('PASTE_') !== 0;
+  var auth = null, db = null;
+  if (configured) {
+    firebase.initializeApp(cfg.firebase);
+    auth = firebase.auth();
+    db = firebase.database();
+    if (cfg.useEmulators) {
+      auth.useEmulator('http://127.0.0.1:9099', { disableWarnings: true });
+      db.useEmulator('127.0.0.1', 9000);
+    }
   }
 
   var uid = null;
@@ -16,6 +20,9 @@
   var roomCb = null;
 
   function init() {
+    if (!configured) {
+      return Promise.reject(new Error('Multiplayer isn’t set up yet (Firebase config missing — see README). Practice rounds still work!'));
+    }
     var persistence = cfg.authPersistence === 'none'
       ? firebase.auth.Auth.Persistence.NONE
       : firebase.auth.Auth.Persistence.LOCAL;

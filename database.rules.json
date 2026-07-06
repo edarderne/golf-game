@@ -3,19 +3,6 @@
     ".read": false,
     ".write": false,
 
-    "games": {
-      "$code": {
-        "public": {
-          ".read": "auth != null"
-        },
-        "private": {
-          "$uid": {
-            ".read": "auth != null && auth.uid === $uid"
-          }
-        }
-      }
-    },
-
     "golf": {
       "rooms": {
         "$code": {

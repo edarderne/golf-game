@@ -1,6 +1,9 @@
-// Firebase web app config — same project as Office Mafia (safe to commit;
-// these values are public by design, security comes from database rules).
-// Golf data lives under its own top-level `golf/` path in the database.
+// Firebase web app config — Island Golf's OWN Firebase project (independent
+// from the Mafia game). Safe to commit: these values are public by design,
+// security comes from the database rules.
+//
+// Setup (one-time): create the project in the Firebase console, then paste
+// your web app config values below — full steps in README.md.
 (function () {
   var emu = new URLSearchParams(location.search).has('emu');
   window.GOLF_CONFIG = {
@@ -12,10 +15,10 @@
           projectId: 'demo-golf',
         }
       : {
-          apiKey: 'AIzaSyCZF4_vZ5CaGBRmGvId5-_nNbRBUe6TIt4',
-          authDomain: 'office-mafia.firebaseapp.com',
-          databaseURL: 'https://office-mafia-default-rtdb.europe-west1.firebasedatabase.app',
-          projectId: 'office-mafia',
+          apiKey: 'PASTE_API_KEY',
+          authDomain: 'PASTE_PROJECT_ID.firebaseapp.com',
+          databaseURL: 'PASTE_DATABASE_URL',
+          projectId: 'PASTE_PROJECT_ID',
         },
     useEmulators: emu,
     // dev/two.html loads the app twice in iframes; 'none' persistence gives

@@ -88,7 +88,7 @@
         }).catch(function () { localStorage.removeItem('golf.room'); });
       }
     }).catch(function (e) {
-      $('home-status').textContent = 'Could not connect: ' + e.message;
+      $('home-status').textContent = e.message;
     });
   }
 
@@ -226,18 +226,24 @@
     // swing button drives the whole meter flow
     $('btn-swing').addEventListener('click', onSwingTap);
 
-    // aiming by dragging on the canvas
+    // aiming: drag left/right rotates the aim (the camera follows);
+    // a quick tap aims directly at the tapped spot
     var canvas = $('course');
-    var aiming = false;
+    var drag = null;
     canvas.addEventListener('pointerdown', function (e) {
       if (phase !== 'aim') return;
-      aiming = true;
-      setAimFromEvent(e);
+      drag = { x: e.clientX, y: e.clientY, aim: aimAngle, moved: false };
     });
     window.addEventListener('pointermove', function (e) {
-      if (aiming && phase === 'aim') setAimFromEvent(e);
+      if (!drag || phase !== 'aim') return;
+      var dx = e.clientX - drag.x;
+      if (Math.abs(dx) > 5) drag.moved = true;
+      if (drag.moved) aimAngle = drag.aim + dx * 0.005;
     });
-    window.addEventListener('pointerup', function () { aiming = false; });
+    window.addEventListener('pointerup', function (e) {
+      if (drag && !drag.moved && phase === 'aim') setAimFromEvent(e);
+      drag = null;
+    });
 
     window.addEventListener('keydown', function (e) {
       if (e.code === 'Space') { e.preventDefault(); onSwingTap(); }
@@ -831,7 +837,7 @@
     else if (phase === 'accuracy') { btn.textContent = 'NOW!'; btn.classList.add('show'); }
     else btn.classList.remove('show');
     $('turn-hint').textContent =
-      phase === 'aim' ? 'Drag on the course to aim, pick a club, then swing'
+      phase === 'aim' ? 'Drag left/right to aim (or tap a target), then swing'
       : phase === 'watch' && room && room.meta.status === 'playing'
         ? (whoseTurn() && whoseTurn() !== myUid ? 'Waiting for ' + playerNameOf(whoseTurn()) + '…' : '')
         : '';
@@ -843,18 +849,17 @@
     var h = hole();
     if (!h) return;
     var b = myBall();
-    var puttingView = phase === 'aim' && !b.holed &&
-      (b.lie === 'green' || (selectedClub === 'putter' && Course.dist(b, h.pin) < 45));
-    if (anim && anim.pos) {
-      // keep both the ball and the pin in frame during flight
-      renderer.fitBounds(h.bounds, 4);
-    } else if (puttingView) {
-      var r = Math.max(h.greenR * 2.4, Course.dist(b, h.pin) * 1.4);
-      renderer.fitBounds({
-        minX: h.green.x - r, maxX: h.green.x + r,
-        minY: h.green.y - r, maxY: h.green.y + r,
-      }, 0);
+    var swinging = phase === 'aim' || phase === 'power' || phase === 'accuracy';
+    if (swinging && !b.holed) {
+      // third-person shot view: behind the ball, aim direction up-screen
+      var c = Physics.club(selectedClub);
+      var d = Course.dist(b, h.pin);
+      var ahead = c.id === 'putter'
+        ? Math.max(26, Math.min(d * 1.8 + 8, 60))
+        : Math.max(95, Math.min(c.carry * Physics.lieFactor(b.lie, c.id) * 1.25 + 30, 330));
+      renderer.fitShot(b, aimAngle, ahead);
     } else {
+      // overview: the whole hole (also during flights so you see the shot)
       renderer.fitBounds(h.bounds, 4);
     }
   }
@@ -886,13 +891,19 @@
     if (phase === 'aim') {
       var b = myBall();
       var c = Physics.club(selectedClub);
-      var reach = c.id === 'putter'
-        ? 42 * (b.lie === 'green' ? 1 : 0.5)
-        : c.carry * Physics.lieFactor(b.lie, c.id) + c.roll * 0.5;
-      aimState = {
-        from: b,
-        to: { x: b.x + Math.sin(aimAngle) * reach, y: b.y + Math.cos(aimAngle) * reach },
-      };
+      if (c.id === 'putter') {
+        // curved preview: simulate a putt hit hard enough to reach the pin
+        var maxPutt = 42 * (b.lie === 'green' ? 1 : 0.5);
+        var pw = Math.max(0.15, Math.min(1, Course.dist(b, hole().pin) * 1.05 / maxPutt));
+        var sim = Physics.simulate(hole(), b, { club: 'putter', aim: aimAngle, power: pw, acc: 0 });
+        aimState = { from: b, path: sim.keys };
+      } else {
+        var reach = c.carry * Physics.lieFactor(b.lie, c.id) + c.roll * 0.5;
+        aimState = {
+          from: b,
+          to: { x: b.x + Math.sin(aimAngle) * reach, y: b.y + Math.cos(aimAngle) * reach },
+        };
+      }
     }
 
     var chars = {};

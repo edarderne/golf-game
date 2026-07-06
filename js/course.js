@@ -159,19 +159,49 @@
       }
     }
 
+    // Green slope: a constant fall direction + magnitude that bends putts.
+    var slopeAng = rng.next() * TAU;
+    var slopeMag = rng.range(0.018, 0.055);
+
     var hole = {
       index: index, par: par, length: Math.round(length),
       tee: tee, green: green, greenR: greenR, pin: pin,
       line: line, fairwayW: fairwayW,
+      fairwayPoly: fairwayOutline(line, fairwayW / 2),
       grassPoly: grassPoly, beachPoly: beachPoly,
       waters: waters, bunkers: bunkers,
-      trees: [], rocks: [], tufts: [],
+      greenSlope: { x: Math.cos(slopeAng) * slopeMag, y: Math.sin(slopeAng) * slopeMag, mag: slopeMag },
+      trees: [], rocks: [], statues: [], tufts: [],
       wind: { angle: rng.next() * TAU, mph: Math.round(rng.range(0, 9)) },
       bounds: polyBounds(beachPoly, 14),
     };
 
     scatterDecor(rng, hole);
     return hole;
+  }
+
+  // Clean capsule polygon around the centerline (transforms correctly under
+  // the tilted camera, unlike a thick canvas stroke).
+  function fairwayOutline(line, halfW) {
+    var left = [], right = [];
+    for (var i = 0; i < line.length; i++) {
+      var n = normalAt(line, i / (line.length - 1));
+      left.push({ x: line[i].x + n.x * halfW, y: line[i].y + n.y * halfW });
+      right.push({ x: line[i].x - n.x * halfW, y: line[i].y - n.y * halfW });
+    }
+    return left.concat(arcCap(line[line.length - 1], line[line.length - 2], halfW), right.reverse(), arcCap(line[0], line[1], halfW));
+  }
+
+  function arcCap(tip, inner, r) {
+    var dx = tip.x - inner.x, dy = tip.y - inner.y;
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var a0 = Math.atan2(dy / len, dx / len) + Math.PI / 2;
+    var pts = [];
+    for (var i = 1; i <= 6; i++) {
+      var a = a0 - (i / 7) * Math.PI;
+      pts.push({ x: tip.x + Math.cos(a) * r, y: tip.y + Math.sin(a) * r });
+    }
+    return pts;
   }
 
   function normalAt(line, t) {
@@ -249,9 +279,9 @@
       // Palms near the island edge, leafy trees inland.
       var edgeDist = edgeDistance(hole, p);
       if (edgeDist < 8) {
-        hole.trees.push({ x: p.x, y: p.y, r: rng.range(4, 6), kind: 'palm', lean: rng.range(-0.5, 0.5) });
+        hole.trees.push({ x: p.x, y: p.y, r: rng.range(4, 6), kind: 'palm', lean: rng.range(-0.5, 0.5), rot: rng.next() * TAU });
       } else {
-        hole.trees.push({ x: p.x, y: p.y, r: rng.range(4.5, 8.5), kind: rng.pick(treeVariants) });
+        hole.trees.push({ x: p.x, y: p.y, r: rng.range(4.5, 8.5), kind: rng.pick(treeVariants), rot: rng.next() * TAU });
       }
     }
     // Rock clusters.
@@ -273,13 +303,49 @@
       hole.rocks.push({ x: rp.x, y: rp.y, pieces: pieces });
       rocks--;
     }
-    // Little colour tufts / flowers.
+    // Moai shrine: a big statue with a ring of small heads (about half of
+    // holes), plus the odd lone head in the rough.
+    if (rng.chance(0.55)) {
+      tries = 150;
+      while (tries-- > 0) {
+        var sp = { x: rng.range(b.minX, b.maxX), y: rng.range(b.minY, b.maxY) };
+        if (terrainAt(hole, sp) !== 'rough') continue;
+        if (distToPolyline(sp, hole.line) < hole.fairwayW / 2 + 16) continue;
+        if (dist(sp, hole.green) < hole.greenR + 22) continue;
+        if (edgeDistance(hole, sp) < 10) continue;
+        var s = rng.range(6, 8.5);
+        hole.statues.push({ x: sp.x, y: sp.y, s: s, kind: 'moai', tint: 0 });
+        var ringN = rng.int(2, 4);
+        for (var ri = 0; ri < ringN; ri++) {
+          var ra = rng.next() * TAU;
+          var rd = s * rng.range(1.7, 2.4);
+          var rp = { x: sp.x + Math.cos(ra) * rd, y: sp.y + Math.sin(ra) * rd };
+          if (terrainAt(hole, rp) !== 'rough') continue;
+          hole.statues.push({ x: rp.x, y: rp.y, s: rng.range(2.4, 3.6), kind: 'head', tint: rng.chance(0.3) ? 1 : 0 });
+        }
+        break;
+      }
+    }
+    var lone = rng.int(0, 3);
+    tries = 120;
+    while (tries-- > 0 && lone > 0) {
+      var lp = { x: rng.range(b.minX, b.maxX), y: rng.range(b.minY, b.maxY) };
+      if (terrainAt(hole, lp) !== 'rough') continue;
+      if (distToPolyline(lp, hole.line) < hole.fairwayW / 2 + 10) continue;
+      hole.statues.push({ x: lp.x, y: lp.y, s: rng.range(2.2, 3.4), kind: 'head', tint: rng.chance(0.3) ? 1 : 0 });
+      lone--;
+    }
+
+    // Little colour bushes / flowers / grass tufts.
     tries = 300;
-    while (tries-- > 0 && hole.tufts.length < 26) {
+    while (tries-- > 0 && hole.tufts.length < 30) {
       var tp = { x: rng.range(b.minX, b.maxX), y: rng.range(b.minY, b.maxY) };
       var terr = terrainAt(hole, tp);
       if (terr !== 'rough' && terr !== 'fairway') continue;
-      hole.tufts.push({ x: tp.x, y: tp.y, kind: rng.pick(['grass', 'grass', 'grass', 'orange', 'yellow']), s: rng.range(0.7, 1.4) });
+      var kind = terr === 'fairway'
+        ? 'grass'
+        : rng.pick(['grass', 'grass', 'grass', 'grass', 'orange', 'yellow', 'pink', 'cyan']);
+      hole.tufts.push({ x: tp.x, y: tp.y, kind: kind, s: rng.range(0.7, 1.4) });
     }
   }
 

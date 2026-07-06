@@ -137,7 +137,16 @@
     var step = 1.0;
     var travelled = 0;
     var total = Math.max(remaining, 0.01);
+    var slope = hole.greenSlope;
     while (remaining > 0.5) {
+      // On the green the slope bends the roll downhill and speeds/slows it.
+      if (slope && terr === 'green') {
+        dx += slope.x * 0.4 * step;
+        dy += slope.y * 0.4 * step;
+        var dl = Math.sqrt(dx * dx + dy * dy) || 1;
+        dx /= dl; dy /= dl;
+        remaining += (dx * slope.x + dy * slope.y) * step * 7;
+      }
       var nx = x + dx * step, ny = y + dy * step;
       var nterr = Course.terrainAt(hole, { x: nx, y: ny });
       if (nterr === 'water') {
