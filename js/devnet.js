@@ -80,5 +80,29 @@
       save(code, room);
       return Promise.resolve();
     },
+    available: function () { return true; },
+    getProfile: function (id) { return Promise.resolve(devGet('profile.' + (id || uid))); },
+    getProfiles: function (ids) {
+      return Promise.resolve(ids.map(function (id) {
+        var p = devGet('profile.' + id);
+        if (p) p.uid = id;
+        return p;
+      }).filter(Boolean));
+    },
+    setProfile: function (p) { devSet('profile.' + uid, p); return Promise.resolve(); },
+    getTournamentDay: function (day) { return Promise.resolve(devGet('tourney.' + day) || {}); },
+    submitTournament: function (day, entry) {
+      var d = devGet('tourney.' + day) || {};
+      if (d[uid]) return Promise.reject(new Error('Already played today'));
+      d[uid] = entry;
+      devSet('tourney.' + day, d);
+      return Promise.resolve();
+    },
   };
+
+  function devGet(k) {
+    var raw = localStorage.getItem('golfdev.' + k);
+    return raw ? JSON.parse(raw) : null;
+  }
+  function devSet(k, v) { localStorage.setItem('golfdev.' + k, JSON.stringify(v)); }
 })();

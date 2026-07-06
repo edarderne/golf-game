@@ -17,10 +17,10 @@
   FirebaseConn.prototype.write = function (updates) { return Net.write(this.code, updates); };
   FirebaseConn.prototype.close = function () { Net.unwatch(); };
 
-  function LocalConn(holes, me) {
+  function LocalConn(holes, me, seed) {
     this.isLocal = true;
     this.room = {
-      meta: { holes: holes, seed: RNG.newSeed(), hostUid: 'me', status: 'playing' },
+      meta: { holes: holes, seed: seed != null ? seed : RNG.newSeed(), hostUid: 'me', status: 'playing' },
       players: { me: { name: me.name || 'You', char: me } },
     };
   }
@@ -69,6 +69,11 @@
   // identity, so room save/rejoin would misbehave — skip it there.
   var REMEMBER_ROOM = window.GOLF_CONFIG.authPersistence !== 'none';
 
+  var profile = null;         // my synced profile (null until loaded / offline)
+  var profileCache = {};      // other players' profiles by uid
+  var recordedGames = {};     // courseKeys already folded into my stats
+  var tourney = null;         // {day} while playing a tournament round
+
   // ---------- boot ----------
 
   function boot() {
@@ -80,6 +85,7 @@
     Net.init().then(function (uid) {
       myUid = uid;
       $('home-status').textContent = '';
+      loadMyProfile();
       // auto-rejoin a live game
       var saved = REMEMBER_ROOM && localStorage.getItem('golf.room');
       if (saved) {
@@ -90,6 +96,87 @@
     }).catch(function (e) {
       $('home-status').textContent = e.message;
     });
+  }
+
+  // ---------- profile / stats ----------
+
+  function loadMyProfile() {
+    Net.getProfile().then(function (p) {
+      profile = p || Meta.emptyProfile(playerName(), me);
+      profile.name = playerName();
+      profile.char = me;
+      saveProfile();
+      updateHomeStats();
+    }).catch(function () { /* offline / not configured */ });
+  }
+
+  function saveProfile() {
+    if (!profile) return;
+    Net.setProfile(profile).catch(function () {});
+  }
+
+  function myHandicap() {
+    return profile ? Meta.handicap(profile.history) : null;
+  }
+
+  function trophyCount(p) {
+    return p && p.trophies ? Object.keys(p.trophies).length : 0;
+  }
+
+  function hasTrophy() { return trophyCount(profile) > 0; }
+
+  // Fold a finished round into my profile (once per course).
+  function recordMyRound() {
+    if (!profile || !course || recordedGames[courseKey]) return;
+    var t = totals()[myUid];
+    if (!t || t.played < room.meta.holes) return; // didn't finish
+    recordedGames[courseKey] = true;
+    var par = 0;
+    for (var i = 0; i < course.length; i++) par += course[i].par;
+    var round = { h: room.meta.holes, s: t.total, p: par, t: Date.now() };
+    Meta.recordRound(profile, round);
+    playerIds().forEach(function (id) {
+      if (id !== myUid) {
+        if (!profile.rivals) profile.rivals = {};
+        profile.rivals[id] = true;
+      }
+    });
+    saveProfile();
+    updateHomeStats();
+    if (tourney) submitTourneyResult(round);
+  }
+
+  function fetchProfilesFor(ids) {
+    ids.forEach(function (id) {
+      if (id === myUid || profileCache[id] !== undefined) return;
+      profileCache[id] = null; // in flight
+      Net.getProfile(id).then(function (p) { profileCache[id] = p; }).catch(function () {});
+    });
+  }
+
+  function profileOf(id) {
+    return id === myUid ? profile : profileCache[id];
+  }
+
+  function playerBadge(id) {
+    var p = profileOf(id);
+    if (!p) return '';
+    var bits = ['HCP ' + Meta.fmtHandicap(Meta.handicap(p.history))];
+    var tc = trophyCount(p);
+    if (tc) bits.push('🏆' + tc);
+    return bits.join(' · ');
+  }
+
+  function updateHomeStats() {
+    var el = $('home-stats');
+    if (!el) return;
+    if (!profile || !profile.stats || !profile.stats.rounds) {
+      el.textContent = '';
+      return;
+    }
+    var h = myHandicap();
+    el.textContent = profile.stats.rounds + ' rounds · handicap ' +
+      Meta.fmtHandicap(h) + (hasTrophy() ? ' · 🏆' + trophyCount(profile) : '');
   }
 
   function playerName() {
@@ -123,6 +210,7 @@
     $('name-input').addEventListener('input', function () {
       me.name = this.value.slice(0, 14);
       Character.save(me);
+      if (profile) { profile.name = playerName(); profile.char = me; saveProfile(); }
     });
     updateCreator();
 
@@ -134,8 +222,13 @@
       return b;
     }
     function cycle(row, d) {
-      me[row.key] = (me[row.key] + d + row.arr.length) % row.arr.length;
+      var idx = me[row.key];
+      do {
+        idx = (idx + d + row.arr.length) % row.arr.length;
+      } while (row.key === 'hat' && Character.LOCKED_HATS[row.arr[idx]] && !hasTrophy() && idx !== me[row.key]);
+      me[row.key] = idx;
       Character.save(me);
+      if (profile) { profile.char = me; saveProfile(); }
       updateCreator();
     }
   }
@@ -198,6 +291,14 @@
     $('btn-leave').addEventListener('click', leaveGame);
     $('btn-exit-final').addEventListener('click', leaveGame);
     $('btn-rematch').addEventListener('click', rematch);
+
+    $('btn-tournament').addEventListener('click', openTournament);
+    $('btn-tourney-back').addEventListener('click', function () { showScreen('home'); });
+    $('btn-tourney-play').addEventListener('click', playTournament);
+    $('btn-leaderboard').addEventListener('click', openLeaderboard);
+    $('btn-close-leaderboard').addEventListener('click', function () {
+      $('overlay-leaderboard').classList.remove('show');
+    });
 
     $('btn-scorecard').addEventListener('click', function () {
       var el = $('overlay-scorecard');
@@ -288,8 +389,11 @@
     $('overlay-summary').classList.remove('show');
     $('overlay-final').classList.remove('show');
     $('overlay-scorecard').classList.remove('show');
+    var wasTourney = !!tourney;
+    tourney = null;
     phase = 'home';
-    showScreen('home');
+    if (wasTourney) openTournament(); // back to the standings
+    else showScreen('home');
     updateCreator();
   }
 
@@ -305,6 +409,7 @@
   function onRoom(data) {
     room = data;
     if (!room || !room.meta) { if (phase !== 'home') leaveGame(); return; }
+    if (!conn.isLocal) fetchProfilesFor(playerIds());
 
     // (re)build course when seed changes (new game / rematch)
     var key = room.meta.seed + ':' + room.meta.holes;
@@ -469,16 +574,18 @@
 
   function onSwingTap() {
     if (phase === 'aim') {
-      meter = { value: 0, dir: 1, speed: 150 * Physics.club(selectedClub).meterSpeed, power: null, last: performance.now() };
+      meter = { value: 0, dir: 1, speed: 150 * Physics.club(selectedClub).meterSpeed, power: null, hpos: 0, hdir: 1, last: performance.now() };
       phase = 'power';
       updateSwingUi();
     } else if (phase === 'power') {
       meter.power = Math.max(0.08, meter.value / 100);
       phase = 'accuracy';
-      meter.dir = -1;
+      // horizontal bar: marker starts at the left, sweeps right and back
+      meter.hpos = 0;
+      meter.hdir = 1;
       updateSwingUi();
     } else if (phase === 'accuracy') {
-      fireShot(meter.value);
+      fireShot(meter.hpos);
     }
   }
 
@@ -486,8 +593,8 @@
     if (!meter || (phase !== 'power' && phase !== 'accuracy')) return;
     var dt = Math.min(0.05, (now - meter.last) / 1000);
     meter.last = now;
-    meter.value += meter.dir * meter.speed * dt;
     if (phase === 'power') {
+      meter.value += meter.dir * meter.speed * dt;
       if (meter.value >= 100) { meter.value = 100; meter.dir = -1; }
       if (meter.value <= 0 && meter.dir === -1) { // swung back without committing
         meter = null;
@@ -496,7 +603,10 @@
         return;
       }
     } else if (phase === 'accuracy') {
-      if (meter.value <= -26) fireShot(-26); // whiffed the timing → big slice
+      // full sweep takes ~0.8s at speed 1 (faster clubs sweep faster)
+      meter.hpos += meter.hdir * (meter.speed / 120) * dt;
+      if (meter.hpos >= 1) { meter.hpos = 1; meter.hdir = -1; }
+      if (meter.hpos <= 0) { meter.hpos = 0; meter.hdir = 1; }
     }
     drawMeter();
   }
@@ -504,17 +614,21 @@
   function drawMeter() {
     var fill = $('meter-fill');
     var mark = $('meter-marker');
-    var range = 130; // -30 .. 100
-    var pct = function (v) { return (100 - v) / range * 100; };
-    mark.style.top = pct(Math.max(-30, Math.min(100, meter ? meter.value : 0))) + '%';
-    var p = meter && meter.power != null ? meter.power * 100 : (phase === 'power' && meter ? meter.value : 0);
+    var pct = function (v) { return 100 - v; }; // 0..100 bottom-up
+    var v = meter ? Math.max(0, Math.min(100, meter.value)) : 0;
+    mark.style.top = pct(v) + '%';
+    var p = meter && meter.power != null ? meter.power * 100 : v;
     fill.style.top = pct(p) + '%';
-    fill.style.bottom = (100 - pct(0)) + '%';
+    // horizontal accuracy marker
+    if (phase === 'accuracy' && meter) {
+      $('hbar-marker').style.left = (meter.hpos * 100) + '%';
+    }
   }
 
-  function fireShot(accValue) {
-    var acc = (0 - accValue) / 20;
-    acc = Math.max(-1, Math.min(1.3, acc));
+  function fireShot(hpos) {
+    // hpos 0..1 → acc -1..1 (left = hook, right = slice)
+    var acc = (hpos - 0.5) * 2;
+    acc = Math.max(-1, Math.min(1, acc));
     if (Math.abs(acc) <= 0.06) acc = 0;
     var b = myBall();
     var shot = {
@@ -724,6 +838,13 @@
         title = '🏆 ' + playerNameOf(w) + ' wins!';
       } else title = '🤝 All square!';
     }
+    recordMyRound();
+    if (tourney) {
+      title = 'Tournament round done!';
+      $('btn-rematch').style.display = 'none';
+    } else {
+      $('btn-rematch').style.display = '';
+    }
     $('final-title').textContent = title;
     $('overlay-final').classList.add('show');
   }
@@ -763,6 +884,173 @@
     });
   }
 
+  // ---------- daily tournament ----------
+
+  function openTournament() {
+    showScreen('tournament');
+    $('tourney-status').textContent = 'Loading…';
+    $('tourney-standings').innerHTML = '';
+    $('btn-tourney-play').style.display = 'none';
+    var today = Meta.dayKey();
+    $('tourney-day').textContent = 'Course of the day · ' + today + ' · ' + Meta.TOURNEY_HOLES + ' holes';
+    claimTrophyIfWon();
+
+    var days = Meta.weekDays(today).filter(function (d) { return d <= today; });
+    Promise.all(days.map(function (d) { return Net.getTournamentDay(d); })).then(function (results) {
+      var dayResults = {};
+      days.forEach(function (d, i) { dayResults[d] = results[i]; });
+      var mine = dayResults[today] && dayResults[today][myUid];
+      if (mine) {
+        $('tourney-status').textContent =
+          'You shot ' + mine.strokes + ' (' + overParText(mine.strokes - mine.par) + ') today. New course ' + nextDropText() + '.';
+      } else {
+        $('tourney-status').textContent = 'You haven’t played today’s course yet. One attempt only — make it count!';
+        $('btn-tourney-play').style.display = '';
+      }
+      renderStandings(dayResults, days.length);
+    }).catch(function (e) {
+      $('tourney-status').textContent = 'Could not load the tournament: ' + e.message;
+    });
+  }
+
+  function overParText(d) {
+    return d === 0 ? 'E' : (d > 0 ? '+' + d : String(d));
+  }
+
+  function nextDropText() {
+    var now = new Date();
+    var next = new Date(now);
+    next.setUTCHours(24, 0, 0, 0);
+    var mins = Math.round((next - now) / 60000);
+    return 'in ' + (mins >= 60 ? Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm' : mins + 'm');
+  }
+
+  function renderStandings(dayResults, playedDays) {
+    var list = Meta.weekStandings(dayResults);
+    var el = $('tourney-standings');
+    if (!list.length) {
+      el.innerHTML = '<p class="status">No one has played this week yet — be the first!</p>';
+      return;
+    }
+    var html = '<table><tr><th></th><th>Player</th><th>Days</th><th>Total</th></tr>';
+    list.forEach(function (p, i) {
+      var cls = p.uid === myUid ? ' class="me-row"' : '';
+      html += '<tr' + cls + '><td>' + (i + 1) + '</td><td>' + esc(p.name) + '</td>' +
+        '<td>' + p.played + '/' + playedDays + '</td>' +
+        '<td><b>' + overParText(p.total) + '</b></td></tr>';
+    });
+    html += '</table>';
+    html += '<p class="status">Missed days count as +' + Meta.MISSED_DAY_PENALTY +
+      '. Week ends Sunday — the winner earns the golden crown 👑</p>';
+    el.innerHTML = html;
+  }
+
+  function playTournament() {
+    var today = Meta.dayKey();
+    tourney = { day: today };
+    myUid = myUid || 'me';
+    var c = new LocalConn(Meta.TOURNEY_HOLES, me, Meta.daySeed(today));
+    c.room.players = {};
+    c.room.players[myUid] = { name: playerName(), char: me };
+    enterRoom(c, null);
+  }
+
+  function submitTourneyResult(round) {
+    var day = tourney.day;
+    Net.submitTournament(day, { name: playerName(), strokes: round.s, par: round.p, ts: Date.now() })
+      .catch(function (e) {
+        showFeedback({ text: 'Score not submitted: ' + e.message, tone: 'bad' }, myUid);
+      });
+  }
+
+  // After a week ends, the winner claims the crown on their next visit.
+  function claimTrophyIfWon() {
+    if (!profile) return;
+    var lastWeek = Meta.weekDays(Meta.dayKey(-7));
+    var weekKey = lastWeek[0];
+    if (profile.trophies && profile.trophies[weekKey]) return;
+    Promise.all(lastWeek.map(function (d) { return Net.getTournamentDay(d); })).then(function (results) {
+      var dayResults = {};
+      var any = false;
+      lastWeek.forEach(function (d, i) {
+        dayResults[d] = results[i];
+        if (Object.keys(results[i] || {}).length) any = true;
+      });
+      if (!any) return;
+      var standings = Meta.weekStandings(dayResults);
+      if (standings[0] && standings[0].uid === myUid) {
+        if (!profile.trophies) profile.trophies = {};
+        profile.trophies[weekKey] = { item: 'crown', ts: Date.now() };
+        saveProfile();
+        updateHomeStats();
+        $('tourney-status').textContent = '👑 You won last week’s tournament! The golden crown is unlocked in the character creator.';
+      }
+    }).catch(function () {});
+  }
+
+  // ---------- rivals leaderboard + trophy cabinet ----------
+
+  function openLeaderboard() {
+    var el = $('leaderboard-body');
+    el.innerHTML = '<p class="status">Loading…</p>';
+    $('overlay-leaderboard').classList.add('show');
+    renderCabinet();
+    var ids = profile && profile.rivals ? Object.keys(profile.rivals) : [];
+    Net.getProfiles(ids).then(function (others) {
+      var rows = others.slice();
+      if (profile) {
+        var mine = JSON.parse(JSON.stringify(profile));
+        mine.uid = myUid;
+        rows.push(mine);
+      }
+      rows = rows.map(function (p) {
+        return {
+          uid: p.uid, name: p.name, char: p.char,
+          rounds: (p.stats && p.stats.rounds) || 0,
+          best: p.stats ? p.stats.best : null,
+          hcp: Meta.handicap(p.history),
+          trend: Meta.trend(p.history),
+          trophies: p.trophies ? Object.keys(p.trophies).length : 0,
+        };
+      });
+      rows.sort(function (a, b) {
+        if (a.hcp == null && b.hcp == null) return b.rounds - a.rounds;
+        if (a.hcp == null) return 1;
+        if (b.hcp == null) return -1;
+        return a.hcp - b.hcp;
+      });
+      if (!rows.length) {
+        el.innerHTML = '<p class="status">Play some rounds to build your leaderboard!</p>';
+        return;
+      }
+      var html = '<table><tr><th></th><th>Player</th><th>HCP</th><th>Form</th><th>Rounds</th><th>🏆</th></tr>';
+      rows.forEach(function (r, i) {
+        var cls = r.uid === myUid ? ' class="me-row"' : '';
+        var arrow = r.trend === 'up' ? '<span class="trend-up">▲</span>'
+          : r.trend === 'down' ? '<span class="trend-down">▼</span>' : '·';
+        html += '<tr' + cls + '><td>' + (i + 1) + '</td><td>' + esc(r.name || 'Player') + '</td>' +
+          '<td><b>' + Meta.fmtHandicap(r.hcp) + '</b></td><td>' + arrow + '</td>' +
+          '<td>' + r.rounds + '</td><td>' + (r.trophies || '–') + '</td></tr>';
+      });
+      html += '</table><p class="status">Handicap = strokes over par per 9 holes (best half of your last 20 rounds). ▲ improving.</p>';
+      el.innerHTML = html;
+    }).catch(function (e) {
+      el.innerHTML = '<p class="status">Could not load: ' + esc(e.message) + '</p>';
+    });
+  }
+
+  function renderCabinet() {
+    var el = $('cabinet');
+    var keys = profile && profile.trophies ? Object.keys(profile.trophies).sort() : [];
+    if (!keys.length) {
+      el.innerHTML = '<p class="status">No trophies yet — win a weekly tournament to earn the golden crown.</p>';
+      return;
+    }
+    el.innerHTML = keys.map(function (k) {
+      return '<div class="trophy">👑<span>Week of ' + esc(k) + '</span></div>';
+    }).join('');
+  }
+
   // ---------- lobby ----------
 
   function renderLobby() {
@@ -778,7 +1066,10 @@
       Character.draw(cv.getContext('2d'), room.players[id].char || {}, 30, 62, 1.5);
       var nm = document.createElement('span');
       nm.textContent = room.players[id].name + (id === myUid ? ' (you)' : '');
-      d.appendChild(cv); d.appendChild(nm);
+      var badge = document.createElement('i');
+      badge.className = 'badge';
+      badge.textContent = playerBadge(id);
+      d.appendChild(cv); d.appendChild(nm); d.appendChild(badge);
       el.appendChild(d);
     });
     $('lobby-waiting').textContent = ids.length < 2 ? 'Waiting for your friend to join…' : 'Starting…';
@@ -830,6 +1121,7 @@
   function updateSwingUi() {
     var inSwing = phase === 'power' || phase === 'accuracy';
     $('meter-wrap').classList.toggle('show', inSwing);
+    $('hbar').classList.toggle('show', phase === 'accuracy');
     $('clubbar').classList.toggle('show', phase === 'aim');
     var btn = $('btn-swing');
     if (phase === 'aim') { btn.textContent = 'SWING'; btn.classList.add('show'); }
@@ -927,7 +1219,7 @@
   }
 
   function showScreen(name) {
-    ['home', 'lobby', 'game'].forEach(function (s) {
+    ['home', 'lobby', 'game', 'tournament'].forEach(function (s) {
       $('screen-' + s).classList.toggle('active', s === name);
     });
   }

@@ -34,7 +34,24 @@
         <button id="btn-join" class="btn">Join game</button>
       </div>
       <button id="btn-practice" class="btn ghost">Practice round (solo)</button>
+      <div class="nav-row">
+        <button id="btn-tournament" class="btn">🏆 Daily tournament</button>
+        <button id="btn-leaderboard" class="btn">📊 Rivals</button>
+      </div>
+      <div id="home-stats" class="status"></div>
       <div id="home-status" class="status">Connecting…</div>
+    </div>
+  </div>
+
+  <!-- DAILY TOURNAMENT -->
+  <div id="screen-tournament" class="screen">
+    <div class="panel">
+      <h2>🏆 Daily Tournament</h2>
+      <p id="tourney-day" class="sub"></p>
+      <p id="tourney-status" class="status"></p>
+      <button id="btn-tourney-play" class="btn primary">Play today’s course</button>
+      <div id="tourney-standings" class="scorecard"></div>
+      <button id="btn-tourney-back" class="btn ghost">Back</button>
     </div>
   </div>
 
@@ -75,16 +92,21 @@
 
     <div id="meter-wrap">
       <div id="meter">
-        <div class="meter-zone perfect"></div>
         <div id="meter-fill"></div>
         <div id="meter-marker"></div>
         <div class="meter-label top">PWR</div>
-        <div class="meter-label snap">⌖</div>
       </div>
     </div>
 
     <div id="controls">
       <div id="clubbar"></div>
+      <div id="hbar">
+        <div class="hbar-zone"></div>
+        <div class="hbar-center"></div>
+        <div id="hbar-marker"></div>
+        <span class="hbar-label left">HOOK</span>
+        <span class="hbar-label right">SLICE</span>
+      </div>
       <button id="btn-swing" class="btn primary big">SWING</button>
     </div>
 
@@ -118,11 +140,23 @@
     </div>
   </div>
 
+  <!-- rivals leaderboard + trophy cabinet (opens from home or in-game) -->
+  <div id="overlay-leaderboard" class="overlay">
+    <div class="panel">
+      <h2>📊 Rivals</h2>
+      <div id="leaderboard-body" class="scorecard"></div>
+      <h2>Trophy cabinet</h2>
+      <div id="cabinet"></div>
+      <button id="btn-close-leaderboard" class="btn">Close</button>
+    </div>
+  </div>
+
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
   <script src="js/config.js"></script>
   <script src="js/rng.js"></script>
+  <script src="js/meta.js"></script>
   <script src="js/character.js"></script>
   <script src="js/course.js"></script>
   <script src="js/physics.js"></script>

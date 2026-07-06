@@ -17,6 +17,24 @@
             }
           }
         }
+      },
+
+      "profiles": {
+        ".read": "auth != null",
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          "name": { ".validate": "newData.isString() && newData.val().length <= 20" }
+        }
+      },
+
+      "tournaments": {
+        ".read": "auth != null",
+        "$day": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && !data.exists()",
+            "strokes": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 99" }
+          }
+        }
       }
     }
   }

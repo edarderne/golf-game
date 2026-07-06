@@ -5,7 +5,9 @@
 
   var SKINS = ['#f6d7b8', '#eab98d', '#c98d5f', '#9c6b43', '#6f4a2f'];
   var COLORS = ['#e05d4f', '#3f8fd2', '#3cb96a', '#f2c14e', '#9b6bd3', '#ef8a3c', '#2fbcaf', '#41516b', '#e778ae', '#f5f0e6'];
-  var HATS = ['none', 'cap', 'bucket', 'visor', 'tophat'];
+  var HATS = ['none', 'cap', 'bucket', 'visor', 'tophat', 'crown'];
+  // hats that must be earned (crown = win a weekly tournament)
+  var LOCKED_HATS = { crown: 'tournament' };
 
   var STORE_KEY = 'golf.character';
 
@@ -101,6 +103,23 @@
     } else if (hat === 'tophat') {
       roundRect(ctx, -7, -29.4, 14, 2.4, 1.2); ctx.fill();
       roundRect(ctx, -4.4, -37, 8.8, 8.4, 1.6); ctx.fill();
+    } else if (hat === 'crown') {
+      // golden tournament crown (ignores hat colour)
+      ctx.fillStyle = '#e8b923';
+      ctx.beginPath();
+      ctx.moveTo(-6, -28);
+      ctx.lineTo(-6, -35);
+      ctx.lineTo(-3, -30.5);
+      ctx.lineTo(0, -36.5);
+      ctx.lineTo(3, -30.5);
+      ctx.lineTo(6, -35);
+      ctx.lineTo(6, -28);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#c99a12';
+      roundRect(ctx, -6, -29.2, 12, 2, 1); ctx.fill();
+      ctx.fillStyle = '#e5484d';
+      ctx.beginPath(); ctx.arc(0, -33.5, 1.1, 0, Math.PI * 2); ctx.fill();
     }
 
     ctx.restore();
@@ -120,6 +139,7 @@
     SKINS: SKINS,
     COLORS: COLORS,
     HATS: HATS,
+    LOCKED_HATS: LOCKED_HATS,
     load: load,
     save: save,
     draw: draw,

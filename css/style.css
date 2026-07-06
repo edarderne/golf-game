@@ -204,21 +204,16 @@ input:focus { outline: none; border-color: var(--green); }
   box-shadow: 0 3px 12px rgba(0,0,0,0.2);
   overflow: hidden;
 }
-/* bar space maps value 100 (top) .. -30 (bottom); 0 sits at 76.9% */
-.meter-zone.perfect {
-  position: absolute; left: 0; right: 0;
-  top: 75.4%; height: 3%;
-  background: rgba(76, 175, 109, 0.55);
-}
+/* vertical power bar: 0 (bottom) .. 100 (top) */
 #meter-fill {
   position: absolute; left: 6px; right: 6px;
-  top: 76.9%; bottom: 23.1%;
+  top: 100%; bottom: 0;
   background: linear-gradient(#e6543f, #f2c14e, #4caf6d);
   border-radius: 6px; opacity: 0.85;
 }
 #meter-marker {
   position: absolute; left: 0; right: 0; height: 4px; margin-top: -2px;
-  background: #3a4a3a; border-radius: 2px; top: 76.9%;
+  background: #3a4a3a; border-radius: 2px; top: 100%;
   box-shadow: 0 0 0 1.5px rgba(255,255,255,0.8);
 }
 .meter-label {
@@ -226,7 +221,38 @@ input:focus { outline: none; border-color: var(--green); }
   font-size: 0.6rem; font-weight: 800; opacity: 0.6;
 }
 .meter-label.top { top: 4px; }
-.meter-label.snap { top: 76.9%; margin-top: 5px; font-size: 0.8rem; }
+
+/* horizontal accuracy bar: stop the sweeping line in the centre */
+#hbar {
+  display: none; position: relative;
+  width: min(78vw, 420px); height: 30px;
+  background: rgba(253,248,236,0.94); border-radius: 12px;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.2);
+  overflow: hidden;
+}
+#hbar.show { display: block; }
+.hbar-zone {
+  position: absolute; top: 0; bottom: 0;
+  left: 47%; width: 6%;
+  background: rgba(76, 175, 109, 0.55);
+}
+.hbar-center {
+  position: absolute; top: 0; bottom: 0; left: 50%;
+  width: 2px; margin-left: -1px;
+  background: var(--green-dark);
+}
+#hbar-marker {
+  position: absolute; top: 2px; bottom: 2px; left: 0;
+  width: 5px; margin-left: -2.5px;
+  background: #3a4a3a; border-radius: 3px;
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,0.8);
+}
+.hbar-label {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  font-size: 0.55rem; font-weight: 800; opacity: 0.45;
+}
+.hbar-label.left { left: 8px; }
+.hbar-label.right { right: 8px; }
 
 /* overlays */
 .overlay {
@@ -246,3 +272,22 @@ input:focus { outline: none; border-color: var(--green); }
 .scorecard td:first-child { text-align: left; font-weight: 700; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scorecard td.under { color: var(--accent); font-weight: 800; }
 .scorecard td.over { color: #5b7ba6; }
+.scorecard .me-row td { background: rgba(76, 175, 109, 0.12); }
+.trend-up { color: var(--green-dark); }
+.trend-down { color: var(--accent); }
+
+/* home nav + profile bits */
+.nav-row { display: flex; gap: 8px; margin-top: 10px; }
+.nav-row .btn { flex: 1; }
+.lobby-player .badge {
+  font-style: normal; font-size: 0.7rem; opacity: 0.65; font-weight: 700;
+}
+
+/* trophy cabinet */
+#cabinet { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 8px 0 14px; }
+.trophy {
+  background: #fff; border: 2px solid #eadfc2; border-radius: 14px;
+  padding: 8px 12px; font-size: 1.6rem;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.trophy span { font-size: 0.62rem; font-weight: 700; opacity: 0.6; }

@@ -58,12 +58,28 @@ python3 -m http.server 8641
   (`?dev2`), no Firebase needed.
 - `window.GolfDebug.state()` in the console shows phase/camera/hole.
 
+## Profiles, handicap & the daily tournament
+
+- Every player gets a **profile** in the database keyed by their anonymous
+  Firebase identity (no login — but it's per-browser/device: clearing site
+  data or switching devices starts a fresh identity).
+- Completed rounds are recorded automatically. **Handicap** = strokes over
+  par per 9 holes, averaged over the best half of your last 20 rounds. It
+  shows on the home screen, in the 1v1 lobby, and on the **📊 Rivals**
+  leaderboard (everyone you've played online, with ▲/▼ form arrows).
+- **🏆 Daily tournament**: a new 3-hole course drops at 00:00 UTC every
+  day, generated from the date so every player in the world gets the same
+  holes. One attempt per day (enforced by database rules — write-once).
+  Scores accumulate Monday–Sunday; missed days cost +15. The weekly winner
+  unlocks the **golden crown** hat, and wins collect in the **trophy
+  cabinet** on the Rivals screen.
+
 ## Gameplay notes
 
 - Swing meter: tap once to start, tap to lock **power** on the rising bar,
-  tap again when the marker returns to the line for **accuracy**. Early →
-  hook (curves left), late → slice (curves right), inside the small green
-  zone → dead straight.
+  then a horizontal bar sweeps left↔right — tap to stop the marker in the
+  centre. Left of centre → hook (curves left), right → slice, inside the
+  green zone → dead straight.
 - Wind (top right) drifts airborne shots; high-lofted clubs drift more.
   Putts ignore wind.
 - Greens slope: white arrows point downhill (stronger slope = brighter

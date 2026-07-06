@@ -102,13 +102,59 @@
     return ref(code).update(updates);
   }
 
+  // ---------- profiles & tournaments ----------
+
+  function profileRef(id) { return db.ref('golf/profiles/' + id); }
+
+  function notReady() {
+    return Promise.reject(new Error('Multiplayer isn’t set up yet (see README)'));
+  }
+
+  function getProfile(id) {
+    if (!configured) return notReady();
+    return profileRef(id || uid).get().then(function (s) { return s.val(); });
+  }
+
+  function getProfiles(ids) {
+    if (!configured) return notReady();
+    return Promise.all(ids.map(function (id) {
+      return profileRef(id).get().then(function (s) {
+        var v = s.val();
+        if (v) v.uid = id;
+        return v;
+      });
+    })).then(function (list) { return list.filter(Boolean); });
+  }
+
+  function setProfile(profile) {
+    if (!configured) return notReady();
+    return profileRef(uid).set(profile);
+  }
+
+  function getTournamentDay(day) {
+    if (!configured) return notReady();
+    return db.ref('golf/tournaments/' + day).get().then(function (s) { return s.val() || {}; });
+  }
+
+  // Write-once per day per player (enforced by database rules).
+  function submitTournament(day, entry) {
+    if (!configured) return notReady();
+    return db.ref('golf/tournaments/' + day + '/' + uid).set(entry);
+  }
+
   window.Net = {
     init: init,
+    available: function () { return configured; },
     createRoom: createRoom,
     joinRoom: joinRoom,
     watchRoom: watchRoom,
     unwatch: unwatch,
     write: write,
     uid: function () { return uid; },
+    getProfile: getProfile,
+    getProfiles: getProfiles,
+    setProfile: setProfile,
+    getTournamentDay: getTournamentDay,
+    submitTournament: submitTournament,
   };
 })();
