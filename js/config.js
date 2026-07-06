@@ -15,10 +15,10 @@
           projectId: 'demo-golf',
         }
       : {
-          apiKey: 'PASTE_API_KEY',
-          authDomain: 'PASTE_PROJECT_ID.firebaseapp.com',
-          databaseURL: 'PASTE_DATABASE_URL',
-          projectId: 'PASTE_PROJECT_ID',
+          apiKey: 'AIzaSyDcE0CMVSanNjTloWJECl1UaHVQ99kdABI',
+          authDomain: 'island-golf-fa3e2.firebaseapp.com',
+          databaseURL: 'https://island-golf-fa3e2-default-rtdb.europe-west1.firebasedatabase.app',
+          projectId: 'island-golf-fa3e2',
         },
     useEmulators: emu,
     // dev/two.html loads the app twice in iframes; 'none' persistence gives

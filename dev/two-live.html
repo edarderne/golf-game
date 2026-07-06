@@ -1,0 +1,18 @@
+<!doctype html>
+<!-- Live harness: two independent players side by side against the REAL
+     Firebase project (persist=none gives each iframe its own anonymous
+     user). Useful for verifying auth + database rules end to end. -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Golf — two player live test</title>
+  <style>
+    body { margin: 0; display: flex; height: 100vh; background: #222; gap: 4px; }
+    iframe { flex: 1; border: none; height: 100%; }
+  </style>
+</head>
+<body>
+  <iframe id="p1" src="../index.html?persist=none"></iframe>
+  <iframe id="p2" src="../index.html?persist=none"></iframe>
+</body>
+</html>
