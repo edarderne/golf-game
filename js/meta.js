@@ -98,7 +98,9 @@
     return days;
   }
 
-  var MISSED_DAY_PENALTY = 15; // over-par charged for a skipped day
+  // Over-par charged for a skipped day. Must exceed the worst realistic
+  // 9-hole round (pickup cap ≈ +4/hole) so playing always beats skipping.
+  var MISSED_DAY_PENALTY = 40;
 
   // dayResults: {day: {uid: {name, strokes, par}}}. Returns sorted standings.
   function weekStandings(dayResults) {
@@ -134,6 +136,6 @@
     weekDays: weekDays,
     weekStandings: weekStandings,
     MISSED_DAY_PENALTY: MISSED_DAY_PENALTY,
-    TOURNEY_HOLES: 3,
+    TOURNEY_HOLES: 9,
   };
 })();

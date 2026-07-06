@@ -67,10 +67,10 @@ python3 -m http.server 8641
   par per 9 holes, averaged over the best half of your last 20 rounds. It
   shows on the home screen, in the 1v1 lobby, and on the **📊 Rivals**
   leaderboard (everyone you've played online, with ▲/▼ form arrows).
-- **🏆 Daily tournament**: a new 3-hole course drops at 00:00 UTC every
+- **🏆 Daily tournament**: a new 9-hole course drops at 00:00 UTC every
   day, generated from the date so every player in the world gets the same
   holes. One attempt per day (enforced by database rules — write-once).
-  Scores accumulate Monday–Sunday; missed days cost +15. The weekly winner
+  Scores accumulate Monday–Sunday; missed days cost +40. The weekly winner
   unlocks the **golden crown** hat, and wins collect in the **trophy
   cabinet** on the Rivals screen.
 
