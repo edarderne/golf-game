@@ -1,0 +1,36 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "games": {
+      "$code": {
+        "public": {
+          ".read": "auth != null"
+        },
+        "private": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid"
+          }
+        }
+      }
+    },
+
+    "golf": {
+      "rooms": {
+        "$code": {
+          ".read": "auth != null",
+          ".write": "auth != null",
+          "meta": {
+            "holes": { ".validate": "newData.isNumber() && (newData.val() === 3 || newData.val() === 6 || newData.val() === 9)" }
+          },
+          "players": {
+            "$uid": {
+              "name": { ".validate": "newData.isString() && newData.val().length <= 20" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

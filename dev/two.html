@@ -1,0 +1,24 @@
+<!doctype html>
+<!-- Dev harness: two independent players side by side using the ?dev2
+     localStorage sync shim (no Firebase needed). Open via any static
+     server, e.g.: npx serve .. then /dev/two.html -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Golf — two player test</title>
+  <style>
+    body { margin: 0; display: flex; height: 100vh; background: #222; gap: 4px; }
+    iframe { flex: 1; border: none; height: 100%; }
+  </style>
+</head>
+<body>
+  <iframe id="p1" src="../index.html?dev2&persist=none"></iframe>
+  <iframe id="p2" src="../index.html?dev2&persist=none"></iframe>
+  <script>
+    // Fresh rooms every load so stale dev state can't confuse a test run.
+    Object.keys(localStorage)
+      .filter(function (k) { return k.indexOf('golfdev.room.') === 0; })
+      .forEach(function (k) { localStorage.removeItem(k); });
+  </script>
+</body>
+</html>
