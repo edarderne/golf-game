@@ -81,9 +81,21 @@
         t.kind = 'pine';
         t.tiers = t.r > 6.5 ? 4 : 3;
         t.pine = rng.int(0, PINES.length - 1);
-        t.faces = rng.chance(0.55) ? 3 : 2; // some pines get a third facet
+        t.faces = rng.chance(0.45) ? 4 : 3; // always faceted, sometimes 4
       } else {
         t.lobes = rng.int(3, 5); // deciduous variety
+      }
+    });
+    // grass grows up around the moai bases
+    h.statues.forEach(function (st) {
+      var n = st.kind === 'moai' ? 4 : 2;
+      for (var i = 0; i < n; i++) {
+        var a = rng.next() * TAU;
+        var d = st.s * (1.1 + rng.next() * 0.7);
+        h.tufts.push({
+          x: st.x + Math.cos(a) * d, y: st.y + Math.sin(a) * d * 0.7,
+          kind: 'tall', s: rng.range(0.9, 1.5), rot: rng.next() * TAU,
+        });
       }
     });
     h.rocks.forEach(function (cl) {
@@ -408,16 +420,6 @@
       deep.addColorStop(1, 'rgba(16,84,104,0)');
       ctx.fillStyle = deep;
       ctx.fillRect(pcs.x - prPx, pcs.y - prPx, prPx * 2, prPx * 2);
-      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-      ctx.lineWidth = 1.5;
-      for (var k = 0; k < 3; k++) {
-        var ph = this.time / (1400 + k * 350) + k * 2.1;
-        var rx = pcs.x + Math.cos(ph) * prPx * 0.35;
-        var ry = pcs.y + Math.sin(ph * 0.8) * prPx * 0.25;
-        ctx.beginPath();
-        ctx.arc(rx, ry, prPx * (0.16 + k * 0.09), Math.PI * 1.1, Math.PI * 1.9);
-        ctx.stroke();
-      }
       ctx.restore();
       this.blobPath(pond);
       ctx.strokeStyle = 'rgba(255,255,255,' + (0.4 + Math.sin(this.time / 900 + i) * 0.15) + ')';
@@ -495,16 +497,27 @@
       ctx.lineTo(cx, kinkY);
       ctx.closePath();
       ctx.fill();
-      // optional third facet: a mid-tone centre wedge, offset toward the
-      // light, rounds the tree out
-      if ((t.faces || 2) >= 3) {
-        var midTone = shade(mix(col.light, col.dark), f * 24);
-        ctx.fillStyle = midTone;
+      // extra facets round the tree out: 3 = light | mid | dark,
+      // 4 adds a second, darker mid wedge on the shaded side
+      var faces = t.faces || 3;
+      var midHex = mix(col.light, col.dark);
+      if (faces >= 3) {
+        ctx.fillStyle = shade(midHex, f * 24);
         ctx.beginPath();
         ctx.moveTo(cx, apexY);
         ctx.lineTo(cx - halfW * 0.42, baseY + (kinkY - baseY) * 0.35);
         ctx.lineTo(cx, kinkY);
-        ctx.lineTo(cx + halfW * 0.18, baseY + (kinkY - baseY) * 0.5);
+        ctx.lineTo(cx + halfW * 0.14, baseY + (kinkY - baseY) * 0.5);
+        ctx.closePath();
+        ctx.fill();
+      }
+      if (faces >= 4) {
+        ctx.fillStyle = shade(mix(midHex, col.dark), f * 22);
+        ctx.beginPath();
+        ctx.moveTo(cx, apexY);
+        ctx.lineTo(cx + halfW * 0.14, baseY + (kinkY - baseY) * 0.5);
+        ctx.lineTo(cx, kinkY);
+        ctx.lineTo(cx + halfW * 0.52, baseY + (kinkY - baseY) * 0.28);
         ctx.closePath();
         ctx.fill();
       }
@@ -701,8 +714,18 @@
     var ctx = this.ctx;
     var s = this.toScreen(st);
     var sc = this.cam.scale;
+    // every statue gets its own face from a position-seeded rng
+    var rng = RNG.make(RNG.mix((st.x * 53) | 0, ((st.y * 97) | 0) + (st.kind === 'moai' ? 7 : 3)));
     var w = st.s * sc;
-    var hgt = w * (st.kind === 'moai' ? 3.1 : 2.5);
+    var hgt = w * ((st.kind === 'moai' ? 2.8 : 2.1) + rng.next() * 0.7);
+    var browY = 0.17 + rng.next() * 0.09;
+    var browTh = 0.055 + rng.next() * 0.035;
+    var noseW = 0.26 + rng.next() * 0.18;
+    var noseL = 0.27 + rng.next() * 0.14;
+    var mouthW = 0.4 + rng.next() * 0.4;
+    var mouthY = 0.68 + rng.next() * 0.1;
+    var eyeH = 0.07 + rng.next() * 0.05;
+    var topknot = rng.chance(0.35);
     var light = st.tint ? '#d5bd74' : '#c3cad2';
     var mid = st.tint ? '#b39a4e' : '#9aa3ad';
     var dark = st.tint ? '#8f7a3a' : '#747d88';
@@ -718,8 +741,8 @@
     }
 
     var top = s.y - hgt;
-    var fw = w * 0.62;   // front face half-width
-    var sw = w * 0.5;    // side face width
+    var fw = w * (0.55 + rng.next() * 0.14);   // front face half-width
+    var sw = w * (0.4 + rng.next() * 0.18);    // side face width
 
     // right side plane (shaded)
     ctx.fillStyle = dark;
@@ -756,12 +779,12 @@
 
     // brow
     ctx.fillStyle = darker;
-    ctx.fillRect(s.x - fw * 0.9, top + hgt * 0.22, fw * 1.8, Math.max(1.5, hgt * 0.075));
+    ctx.fillRect(s.x - fw * 0.9, top + hgt * browY, fw * 1.8, Math.max(1.5, hgt * browTh));
     ctx.fillStyle = shade(dark, -14);
-    ctx.fillRect(s.x + fw, top + hgt * 0.24, sw * 0.8, Math.max(1, hgt * 0.05));
+    ctx.fillRect(s.x + fw, top + hgt * (browY + 0.02), sw * 0.8, Math.max(1, hgt * browTh * 0.7));
 
     // nose wedge: lit left edge, shaded right
-    var nx = s.x - fw * 0.08, nw = fw * 0.36, ny = top + hgt * 0.27, nh = hgt * 0.34;
+    var nx = s.x - fw * 0.08, nw = fw * noseW, ny = top + hgt * (browY + 0.05), nh = hgt * noseL;
     ctx.fillStyle = light;
     ctx.fillRect(nx - nw * 0.5, ny, nw * 0.5, nh);
     ctx.fillStyle = darker;
@@ -769,19 +792,56 @@
     ctx.fillRect(nx - nw * 0.6, ny + nh, nw * 1.2, Math.max(1, hgt * 0.03));
 
     // eye sockets
+    var eyeY = top + hgt * (browY + browTh + 0.03);
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.fillRect(s.x - fw * 0.72, top + hgt * 0.31, fw * 0.44, hgt * 0.09);
-    ctx.fillRect(s.x + fw * 0.22, top + hgt * 0.31, fw * 0.44, hgt * 0.09);
+    ctx.fillRect(s.x - fw * 0.72, eyeY, fw * 0.44, hgt * eyeH);
+    ctx.fillRect(s.x + fw * 0.22, eyeY, fw * 0.44, hgt * eyeH);
 
     // mouth
     ctx.fillStyle = darker;
-    ctx.fillRect(s.x - fw * 0.34, top + hgt * 0.74, fw * 0.68, Math.max(1, hgt * 0.045));
+    ctx.fillRect(s.x - fw * mouthW * 0.5, top + hgt * mouthY, fw * mouthW, Math.max(1, hgt * 0.045));
 
-    // base pebbles + grass
-    ctx.fillStyle = LAB.rockMid;
-    ctx.beginPath(); ctx.ellipse(s.x - w * 0.9, s.y + w * 0.05, w * 0.28, w * 0.18, 0.3, 0, TAU); ctx.fill();
-    ctx.fillStyle = LAB.rockDark;
-    ctx.beginPath(); ctx.ellipse(s.x + w * 1.0, s.y + w * 0.12, w * 0.22, w * 0.14, -0.2, 0, TAU); ctx.fill();
+    // pukao topknot (the red stone "hat" some real moai wear)
+    if (topknot) {
+      var pkW = fw * 0.85, pkH = w * 0.55;
+      ctx.fillStyle = '#a34f35';
+      ctx.fillRect(s.x - pkW, top - pkH + w * 0.06, pkW * 2, pkH);
+      ctx.fillStyle = '#8a3f2a';
+      ctx.fillRect(s.x + pkW * 0.3, top - pkH + w * 0.06, pkW * 0.7, pkH);
+      ctx.fillStyle = '#bf6a4a';
+      ctx.beginPath();
+      ctx.ellipse(s.x, top - pkH + w * 0.06, pkW, pkW * 0.32, 0, 0, TAU);
+      ctx.fill();
+    }
+
+    // scattered faceted stones at the base (varied, not flat discs)
+    var stones = 2 + Math.floor(rng.next() * 3);
+    for (var st2 = 0; st2 < stones; st2++) {
+      var sa = rng.next() * TAU;
+      var sd = w * (0.85 + rng.next() * 0.6);
+      var px = s.x + Math.cos(sa) * sd;
+      var py = s.y + Math.sin(sa) * sd * 0.45 + w * 0.08;
+      var pr = w * (0.16 + rng.next() * 0.2);
+      var prot = rng.next() * TAU;
+      ctx.fillStyle = LAB.rockDark;
+      ctx.beginPath();
+      for (var pv = 0; pv < 5; pv++) {
+        var pa = prot + (pv / 5) * TAU;
+        var prr = pr * (0.8 + rng.next() * 0.35);
+        var vx = px + Math.cos(pa) * prr, vy = py + Math.sin(pa) * prr * 0.8;
+        if (pv === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = LAB.rockLight;
+      ctx.beginPath();
+      ctx.moveTo(px - pr * 0.7, py - pr * 0.1);
+      ctx.lineTo(px - pr * 0.15, py - pr * 0.75);
+      ctx.lineTo(px + pr * 0.55, py - pr * 0.35);
+      ctx.lineTo(px, py + pr * 0.1);
+      ctx.closePath();
+      ctx.fill();
+    }
   };
 
   // ---------- tufts: tall grass, flowers, props ----------
@@ -1000,12 +1060,13 @@
   var Ambient = {
     birds: null, birdTimer: 4000,
     fish: null, fishTimer: 3000, splashes: [],
+    whale: null, whaleTimer: 18000,
     ducks: [],
     turtle: null,
     deer: null, deerTimer: 7000,
 
     reset: function (h) {
-      this.birds = null; this.fish = null; this.deer = null;
+      this.birds = null; this.fish = null; this.deer = null; this.whale = null;
       this.splashes = [];
       this.ducks = [];
       var self = this;
@@ -1047,7 +1108,7 @@
         };
       }
 
-      // fish (world space, in open sea)
+      // fish jump close to the shore
       if (this.fish) {
         this.fish.t += sec / 1.15;
         if (this.fish.t >= 1) {
@@ -1055,8 +1116,8 @@
           this.fish = null;
         }
       } else if ((this.fishTimer -= dt) < 0) {
-        this.fishTimer = 7000 + Math.random() * 6000;
-        var spot = seaSpot(h);
+        this.fishTimer = 6000 + Math.random() * 5000;
+        var spot = seaSpot(h, 4, 12);
         if (spot) {
           var a = Math.random() * TAU;
           this.fish = {
@@ -1065,6 +1126,22 @@
             t: 0,
           };
           this.splashes.push({ x: spot.x, y: spot.y, t0: performance.now() });
+        }
+      }
+
+      // whale: rare, far out in the deep water
+      if (this.whale) {
+        this.whale.t += sec / 5;
+        if (this.whale.t >= 1) {
+          this.splashes.push({ x: this.whale.x + this.whale.dx * 4, y: this.whale.y + this.whale.dy * 4, t0: performance.now() });
+          this.whale = null;
+        }
+      } else if ((this.whaleTimer -= dt) < 0) {
+        this.whaleTimer = 45000 + Math.random() * 45000;
+        var wspot = seaSpot(h, 35, 65);
+        if (wspot) {
+          var wa = Math.random() * TAU;
+          this.whale = { x: wspot.x, y: wspot.y, dx: Math.cos(wa), dy: Math.sin(wa), t: 0 };
         }
       }
 
@@ -1087,26 +1164,99 @@
         else tu.heading += 1.4;
       }
 
-      // deer: appears near trees, grazes, slips away
+      // deer: wanders out of the treeline, ambles across the open (fairway
+      // included), pausing to graze, then fades away
       if (this.deer) {
-        this.deer.age += dt;
-        if (this.deer.age > this.deer.life) this.deer = null;
+        var de = this.deer;
+        de.age += dt;
+        de.modeT -= dt;
+        if (de.modeT < 0) {
+          de.grazing = !de.grazing;
+          de.modeT = de.grazing ? 2200 + Math.random() * 1600 : 3500 + Math.random() * 3000;
+          if (!de.grazing) de.heading += (Math.random() - 0.5) * 1.2;
+        }
+        if (!de.grazing) {
+          de.heading += (Math.random() - 0.5) * 0.5 * sec;
+          var step = 1.35 * sec;
+          var dnx = de.x + Math.sin(de.heading) * step;
+          var dny = de.y + Math.cos(de.heading) * step;
+          var terr = Course.terrainAt(h, { x: dnx, y: dny });
+          if (terr === 'rough' || terr === 'fairway' || terr === 'tee') {
+            de.x = dnx; de.y = dny;
+            de.walk += step * 2.6;
+          } else {
+            de.heading += 1.5;
+          }
+        }
+        if (de.age > de.life) this.deer = null;
       } else if ((this.deerTimer -= dt) < 0) {
-        this.deerTimer = 14000 + Math.random() * 10000;
+        this.deerTimer = 13000 + Math.random() * 9000;
         var trees = h.trees.filter(function (t) { return t.kind !== 'palm'; });
         if (trees.length) {
           var tr = trees[Math.floor(Math.random() * trees.length)];
           var dp = { x: tr.x + 2.5, y: tr.y + 2 };
           if (Course.terrainAt(h, dp) === 'rough') {
-            this.deer = { x: dp.x, y: dp.y, flip: Math.random() < 0.5 ? 1 : -1, age: 0, life: 6500 + Math.random() * 3000, phase: Math.random() * TAU };
+            this.deer = {
+              x: dp.x, y: dp.y, age: 0, life: 20000 + Math.random() * 10000,
+              heading: Math.random() * TAU, grazing: false, modeT: 3000,
+              walk: 0, phase: Math.random() * TAU,
+            };
           }
         }
       }
     },
 
-    // fish + splash rings (drawn between sea and island)
+    // fish, whale + splash rings (drawn between sea and island)
     drawSeaLife: function (R) {
       var ctx = R.ctx;
+      if (this.whale) {
+        var wh = this.whale;
+        var t = wh.t;
+        var rise = Math.sin(Math.PI * Math.min(1, t * 1.15)); // surfaces then dives
+        var ws = R.toScreen({ x: wh.x + wh.dx * t * 5, y: wh.y + wh.dy * t * 5 });
+        var wu = R.cam.scale;
+        var L = wu * 7.5, H = wu * 2.3 * rise;
+        ctx.save();
+        // only the back shows above the waterline
+        ctx.beginPath();
+        ctx.rect(ws.x - L, ws.y - H - wu * 3, L * 2, H + wu * 3);
+        ctx.clip();
+        ctx.fillStyle = '#40606f';
+        ctx.beginPath();
+        ctx.ellipse(ws.x, ws.y, L * 0.62, Math.max(0.01, H), 0, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#54798a';
+        ctx.beginPath();
+        ctx.ellipse(ws.x - L * 0.12, ws.y - H * 0.28, L * 0.42, Math.max(0.01, H * 0.55), -0.08, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+        // tail fluke lifts as it dives
+        if (t > 0.55 && rise > 0.05) {
+          var fl = Math.sin((t - 0.55) / 0.45 * Math.PI);
+          var fx = ws.x - L * 0.66, fy = ws.y - fl * wu * 2.4;
+          ctx.fillStyle = '#40606f';
+          ctx.beginPath();
+          ctx.moveTo(fx, fy + wu * 1.2);
+          ctx.quadraticCurveTo(fx - wu * 1.6, fy - wu * 0.6, fx - wu * 1.1, fy - wu * 1.1);
+          ctx.quadraticCurveTo(fx - wu * 0.2, fy - wu * 0.5, fx + wu * 0.2, fy - wu * 1.2);
+          ctx.quadraticCurveTo(fx + wu * 0.9, fy - wu * 0.4, fx, fy + wu * 1.2);
+          ctx.closePath();
+          ctx.fill();
+        }
+        // spout puff shortly after surfacing
+        if (t > 0.2 && t < 0.5) {
+          var sp = (t - 0.2) / 0.3;
+          ctx.strokeStyle = 'rgba(255,255,255,' + (0.7 * (1 - sp)) + ')';
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          for (var j = -1; j <= 1; j++) {
+            ctx.beginPath();
+            ctx.moveTo(ws.x + L * 0.4, ws.y - H);
+            ctx.lineTo(ws.x + L * 0.4 + j * wu * (0.7 + sp), ws.y - H - wu * (1.4 + sp * 1.6));
+            ctx.stroke();
+          }
+        }
+      }
       if (this.fish) {
         var f = this.fish;
         var p = f.t;
@@ -1190,7 +1340,7 @@
       if (this.turtle) {
         var tu = this.turtle;
         var s = R.toScreen(tu);
-        var u = sc * 0.7;
+        var u = sc * 1.15;
         var step = Math.sin(tu.phase) * u * 0.1;
         var dir = Math.sin(tu.heading) >= 0 ? 1 : -1;
         ctx.fillStyle = 'rgba(120,100,60,0.3)';
@@ -1228,19 +1378,20 @@
         var de = this.deer;
         var s = R.toScreen(de);
         var u = sc * 0.85;
-        var fade = Math.min(1, de.age / 400, (de.life - de.age) / 400);
-        var graze = Math.max(0, Math.sin(de.age / 1200 + de.phase)) * u * 0.55;
-        var f = de.flip;
+        var fade = Math.min(1, de.age / 500, (de.life - de.age) / 700);
+        var graze = de.grazing ? Math.max(0, Math.sin(de.age / 700 + de.phase)) * u * 0.55 : 0;
+        var f = Math.sin(de.heading) >= 0 ? 1 : -1;
         ctx.save();
         ctx.globalAlpha = Math.max(0, fade);
         dropShadow(R, s.x, s.y, u * 2.4, u * 1.5);
-        // legs
+        // legs (swing while walking)
         ctx.strokeStyle = '#8a6238';
         ctx.lineWidth = Math.max(1.2, u * 0.16);
-        [[-0.8, -0.55], [-0.35, -0.6], [0.35, -0.58], [0.8, -0.5]].forEach(function (lg) {
+        [[-0.8, 0], [-0.35, Math.PI], [0.35, 0.4], [0.8, Math.PI + 0.4]].forEach(function (lg) {
+          var swing = de.grazing ? 0 : Math.sin(de.walk + lg[1]) * u * 0.28;
           ctx.beginPath();
           ctx.moveTo(s.x + lg[0] * u * f, s.y - u * 1.1);
-          ctx.lineTo(s.x + (lg[0] + lg[1] * 0.06) * u * f, s.y);
+          ctx.lineTo(s.x + lg[0] * u * f + swing * f, s.y);
           ctx.stroke();
         });
         // body
@@ -1295,15 +1446,17 @@
     },
   };
 
-  // spot in open sea, comfortably clear of the island
-  function seaSpot(h) {
+  // spot in the sea between minM and maxM yards off the shoreline:
+  // pick a beach-edge vertex and push outward from the island centre
+  function seaSpot(h, minM, maxM) {
     var b = h.bounds;
     var cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
-    var rad = Math.max(b.maxX - b.minX, b.maxY - b.minY) * 0.5;
     for (var i = 0; i < 30; i++) {
-      var a = Math.random() * TAU;
-      var d = rad + 14 + Math.random() * 22;
-      var p = { x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d };
+      var v = h.beachPoly[Math.floor(Math.random() * h.beachPoly.length)];
+      var dx = v.x - cx, dy = v.y - cy;
+      var dl = Math.sqrt(dx * dx + dy * dy) || 1;
+      var m = minM + Math.random() * (maxM - minM);
+      var p = { x: v.x + (dx / dl) * m, y: v.y + (dy / dl) * m };
       if (!Course.pointInPoly(p, h.beachPoly)) return p;
     }
     return null;
