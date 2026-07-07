@@ -761,6 +761,7 @@
     banner('Hole ' + (holeIndex() + 1) + ' · Par ' + h.par + ' · ' + h.length + 'y');
     renderer.fitBounds(h.bounds, 4);
     renderer.snapCamera();
+    if (window.Ambient) Ambient.reset(h);
     refreshTurn();
   }
 
@@ -1178,6 +1179,7 @@
     tickAnimation(now);
     updateCamera();
     renderer.tickCamera(dt);
+    if (window.Ambient) Ambient.update(dt, hole(), renderer);
 
     var aimState = null;
     if (phase === 'aim') {

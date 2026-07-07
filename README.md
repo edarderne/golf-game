@@ -97,7 +97,8 @@ python3 -m http.server 8641
 | --- | --- |
 | `js/course.js` | Seeded procedural hole generation + terrain lookup |
 | `js/physics.js` | Clubs, deterministic shot/roll simulation, green slopes |
-| `js/render.js` | Pseudo-3D canvas renderer (rotating/tilting camera, depth-sorted low-poly world) |
+| `js/render.js` | Pseudo-3D canvas renderer: low-poly diorama look (faceted pines/trees/boulders, moai, props, animated sea, one-sun shadow system) |
+| `js/ambient.js` | Visual-only wildlife: birds, shore fish, rare whale, pond ducks, beach turtle, wandering deer |
 | `js/game.js` | Screens, swing meter, turn flow, sync logic |
 | `js/net.js` | Firebase auth + room create/join/watch |
 | `js/devnet.js` | `?dev2` localStorage net shim for local 2-player testing |

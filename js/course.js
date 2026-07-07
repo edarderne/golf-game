@@ -280,8 +280,19 @@
       var edgeDist = edgeDistance(hole, p);
       if (edgeDist < 8) {
         hole.trees.push({ x: p.x, y: p.y, r: rng.range(4, 6), kind: 'palm', lean: rng.range(-0.5, 0.5), rot: rng.next() * TAU });
+      } else if (rng.chance(0.6)) {
+        var pr = rng.range(4.5, 8.5);
+        hole.trees.push({
+          x: p.x, y: p.y, r: pr, kind: 'pine',
+          tiers: pr > 6.5 ? 4 : 3, pine: rng.int(0, 2),
+          faces: rng.chance(0.45) ? 4 : 3,
+          rot: rng.next() * TAU,
+        });
       } else {
-        hole.trees.push({ x: p.x, y: p.y, r: rng.range(4.5, 8.5), kind: rng.pick(treeVariants), rot: rng.next() * TAU });
+        hole.trees.push({
+          x: p.x, y: p.y, r: rng.range(4.5, 8.5), kind: rng.pick(treeVariants),
+          lobes: rng.int(3, 5), rot: rng.next() * TAU,
+        });
       }
     }
     // Rock clusters.
@@ -297,9 +308,12 @@
       for (var i = 0; i < n; i++) {
         pieces.push({
           x: rp.x + rng.range(-7, 7), y: rp.y + rng.range(-5, 5),
-          r: rng.range(3.5, 7.5), sides: rng.int(5, 7), rot: rng.next() * TAU,
+          r: rng.range(5, 10.5), sides: rng.int(5, 7), rot: rng.next() * TAU,
         });
       }
+      // little capstone lump riding the biggest boulder
+      var big = pieces[0];
+      pieces.push({ x: big.x + 1, y: big.y + 1, r: big.r * 0.4, sides: 6, rot: big.rot + 1.7, cap: true, capR: big.r });
       hole.rocks.push({ x: rp.x, y: rp.y, pieces: pieces });
       rocks--;
     }
@@ -336,7 +350,7 @@
       lone--;
     }
 
-    // Little colour bushes / flowers / grass tufts.
+    // Little flowers / grass tufts.
     tries = 300;
     while (tries-- > 0 && hole.tufts.length < 30) {
       var tp = { x: rng.range(b.minX, b.maxX), y: rng.range(b.minY, b.maxY) };
@@ -345,7 +359,91 @@
       var kind = terr === 'fairway'
         ? 'grass'
         : rng.pick(['grass', 'grass', 'grass', 'grass', 'orange', 'yellow', 'pink', 'cyan']);
-      hole.tufts.push({ x: tp.x, y: tp.y, kind: kind, s: rng.range(0.7, 1.4) });
+      hole.tufts.push({ x: tp.x, y: tp.y, kind: kind, s: rng.range(0.7, 1.4), rot: rng.next() * TAU });
+    }
+
+    function roughSpot(minFairwayGap) {
+      for (var i = 0; i < 60; i++) {
+        var p = { x: rng.range(b.minX, b.maxX), y: rng.range(b.minY, b.maxY) };
+        if (terrainAt(hole, p) !== 'rough') continue;
+        if (minFairwayGap && distToPolyline(p, hole.line) < hole.fairwayW / 2 + minFairwayGap) continue;
+        return p;
+      }
+      return null;
+    }
+
+    // Tall grass in the rough, hugging rocks and moai bases.
+    var added = 0;
+    tries = 300;
+    while (tries-- > 0 && added < 26) {
+      var g = roughSpot(0);
+      if (!g) break;
+      hole.tufts.push({ x: g.x, y: g.y, kind: 'tall', s: rng.range(0.8, 1.5), rot: rng.next() * TAU });
+      added++;
+    }
+    hole.rocks.forEach(function (cl) {
+      for (var gi = 0; gi < 3; gi++) {
+        var ga = rng.next() * TAU;
+        var gd = rng.range(6, 11);
+        var gp = { x: cl.x + Math.cos(ga) * gd, y: cl.y + Math.sin(ga) * gd };
+        if (terrainAt(hole, gp) === 'rough') {
+          hole.tufts.push({ x: gp.x, y: gp.y, kind: 'tall', s: rng.range(1, 1.6), rot: rng.next() * TAU });
+        }
+      }
+    });
+    hole.statues.forEach(function (st) {
+      var gn = st.kind === 'moai' ? 4 : 2;
+      for (var gi = 0; gi < gn; gi++) {
+        var ga = rng.next() * TAU;
+        var gd = st.s * (1.1 + rng.next() * 0.7);
+        hole.tufts.push({
+          x: st.x + Math.cos(ga) * gd, y: st.y + Math.sin(ga) * gd * 0.7,
+          kind: 'tall', s: rng.range(0.9, 1.5), rot: rng.next() * TAU,
+        });
+      }
+    });
+
+    // Props: stumps, fallen logs, dead trees, mushrooms, pebbles.
+    [['stump', rng.int(1, 3)], ['log', rng.int(1, 2)], ['dead', rng.int(1, 2)], ['pebble', rng.int(2, 4)]]
+      .forEach(function (pc) {
+        for (var pi = 0; pi < pc[1]; pi++) {
+          var pp = roughSpot(4);
+          if (!pp) return;
+          hole.tufts.push({ x: pp.x, y: pp.y, kind: pc[0], s: rng.range(0.9, 1.4), rot: rng.next() * TAU });
+          if (pc[0] === 'stump' && rng.chance(0.7)) {
+            hole.tufts.push({ x: pp.x + rng.range(2, 4), y: pp.y - rng.range(1, 3), kind: 'shroom', s: rng.range(0.8, 1.2), rot: rng.next() * TAU });
+          }
+        }
+      });
+
+    // Sand speckle: beach + bunkers.
+    hole.sandDots = [];
+    tries = 500;
+    while (tries-- > 0 && hole.sandDots.length < 70) {
+      var sd = { x: rng.range(b.minX, b.maxX), y: rng.range(b.minY, b.maxY) };
+      if (terrainAt(hole, sd) !== 'sand') continue;
+      hole.sandDots.push({ x: sd.x, y: sd.y, r: rng.range(0.35, 0.8), light: rng.chance(0.3) });
+    }
+    hole.bunkerDots = [];
+    hole.bunkers.forEach(function (poly) {
+      var bb = polyBounds(poly, 0);
+      var bn = 0, guard = 80;
+      while (guard-- > 0 && bn < 9) {
+        var dp = { x: rng.range(bb.minX, bb.maxX), y: rng.range(bb.minY, bb.maxY) };
+        if (!pointInPoly(dp, poly)) continue;
+        hole.bunkerDots.push({ x: dp.x, y: dp.y, r: rng.range(0.3, 0.6), light: rng.chance(0.3) });
+        bn++;
+      }
+    });
+
+    // Subtle low-poly tone patches on the rough.
+    hole.patches = [];
+    tries = 400;
+    while (tries-- > 0 && hole.patches.length < 54) {
+      var pa = roughSpot(0);
+      if (!pa) break;
+      if (dist(pa, hole.green) < hole.greenR + 10) continue;
+      hole.patches.push({ x: pa.x, y: pa.y, r: rng.range(2.5, 6), rot: rng.next() * TAU, light: rng.chance(0.5) });
     }
   }
 
