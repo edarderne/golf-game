@@ -81,6 +81,9 @@
         t.kind = 'pine';
         t.tiers = t.r > 6.5 ? 4 : 3;
         t.pine = rng.int(0, PINES.length - 1);
+        t.faces = rng.chance(0.55) ? 3 : 2; // some pines get a third facet
+      } else {
+        t.lobes = rng.int(3, 5); // deciduous variety
       }
     });
     h.rocks.forEach(function (cl) {
@@ -133,7 +136,7 @@
       }
     });
 
-    // sand speckle
+    // sand speckle (beach)
     h.sandDots = [];
     tries = 500;
     while (tries-- > 0 && h.sandDots.length < 70) {
@@ -141,6 +144,22 @@
       if (Course.terrainAt(h, sp) !== 'sand') continue;
       h.sandDots.push({ x: sp.x, y: sp.y, r: rng.range(0.35, 0.8), light: rng.chance(0.3) });
     }
+    // sand speckle (bunkers): same texture, sampled inside each bunker
+    h.bunkerDots = [];
+    h.bunkers.forEach(function (poly) {
+      var bb = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+      poly.forEach(function (p) {
+        bb.minX = Math.min(bb.minX, p.x); bb.maxX = Math.max(bb.maxX, p.x);
+        bb.minY = Math.min(bb.minY, p.y); bb.maxY = Math.max(bb.maxY, p.y);
+      });
+      var n = 0, guard = 80;
+      while (guard-- > 0 && n < 9) {
+        var dp = { x: rng.range(bb.minX, bb.maxX), y: rng.range(bb.minY, bb.maxY) };
+        if (!Course.pointInPoly(dp, poly)) continue;
+        h.bunkerDots.push({ x: dp.x, y: dp.y, r: rng.range(0.3, 0.6), light: rng.chance(0.3) });
+        n++;
+      }
+    });
 
     // ground mottle
     h.patches = [];
@@ -157,6 +176,7 @@
   function rebuild() {
     holeOld = pickHole(seed);
     holeNew = decorate(pickHole(seed), seed);
+    Ambient.reset(holeNew);
     fitView(true);
   }
 
@@ -188,11 +208,14 @@
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, this.w, this.h);
     this.drawSea();
+    Ambient.drawSeaLife(this);
 
     if (state.hole) {
       this.drawGround(state.hole, state);
+      Ambient.drawLand(this);
       this.drawEntities(state.hole, state);
     }
+    Ambient.drawAir(this);
 
     var sun = ctx.createLinearGradient(0, 0, this.w, this.h);
     sun.addColorStop(0, 'rgba(255,248,214,0.07)');
@@ -352,17 +375,63 @@
       ctx.fill();
       ctx.restore();
     }
+    // bunker speckle (same grain as the beach)
+    if (hole.bunkerDots) {
+      for (i = 0; i < hole.bunkerDots.length; i++) {
+        var bd = hole.bunkerDots[i];
+        var bds = this.toScreen(bd);
+        ctx.fillStyle = bd.light ? LAB.sandDotLight : LAB.sandDot;
+        ctx.beginPath();
+        ctx.arc(bds.x, bds.y, bd.r * sc * 0.6, 0, TAU);
+        ctx.fill();
+      }
+    }
+    // ponds: same treatment as the sea — deep centre, drifting ripples,
+    // pulsing foam edge
     for (i = 0; i < hole.waters.length; i++) {
-      this.blobPath(hole.waters[i]);
+      var pond = hole.waters[i];
+      this.blobPath(pond);
       ctx.fillStyle = LAB.water;
       ctx.fill();
-      this.blobPath(hole.waters[i]);
-      ctx.strokeStyle = LAB.waterEdge;
+      var pc = polyCentroid(pond);
+      var pcs = this.toScreen(pc);
+      var pr = 0;
+      for (var vi = 0; vi < pond.length; vi++) {
+        pr = Math.max(pr, Math.hypot(pond[vi].x - pc.x, pond[vi].y - pc.y));
+      }
+      var prPx = pr * sc;
+      ctx.save();
+      this.blobPath(pond);
+      ctx.clip();
+      var deep = ctx.createRadialGradient(pcs.x, pcs.y, prPx * 0.1, pcs.x, pcs.y, prPx);
+      deep.addColorStop(0, 'rgba(16,84,104,0.35)');
+      deep.addColorStop(1, 'rgba(16,84,104,0)');
+      ctx.fillStyle = deep;
+      ctx.fillRect(pcs.x - prPx, pcs.y - prPx, prPx * 2, prPx * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 1.5;
+      for (var k = 0; k < 3; k++) {
+        var ph = this.time / (1400 + k * 350) + k * 2.1;
+        var rx = pcs.x + Math.cos(ph) * prPx * 0.35;
+        var ry = pcs.y + Math.sin(ph * 0.8) * prPx * 0.25;
+        ctx.beginPath();
+        ctx.arc(rx, ry, prPx * (0.16 + k * 0.09), Math.PI * 1.1, Math.PI * 1.9);
+        ctx.stroke();
+      }
+      ctx.restore();
+      this.blobPath(pond);
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.4 + Math.sin(this.time / 900 + i) * 0.15) + ')';
       ctx.lineWidth = 2;
       ctx.stroke();
     }
     if (state.aim) this.drawAim(state.aim);
   };
+
+  function polyCentroid(poly) {
+    var cx = 0, cy = 0;
+    for (var i = 0; i < poly.length; i++) { cx += poly[i].x; cy += poly[i].y; }
+    return { x: cx / poly.length, y: cy / poly.length };
+  }
 
   // ---------- trees ----------
 
@@ -402,12 +471,12 @@
       var sway = Math.sin((t.rot || 0) * 3 + i * 1.7) * r * 0.06;
       var cx = s.x + sway;
 
-      // dark under-rim: separates this tier from the one below
-      ctx.fillStyle = shade(col.dark, -18);
+      // under-rim: separates this tier from the one below
+      ctx.fillStyle = shade(col.dark, -10);
       ctx.beginPath();
-      ctx.moveTo(cx - halfW * 1.04, baseY + r * 0.1);
-      ctx.lineTo(cx + halfW * 1.04, baseY + r * 0.1);
-      ctx.lineTo(cx, kinkY + r * 0.12);
+      ctx.moveTo(cx - halfW * 1.02, baseY + r * 0.08);
+      ctx.lineTo(cx + halfW * 1.02, baseY + r * 0.08);
+      ctx.lineTo(cx, kinkY + r * 0.1);
       ctx.closePath();
       ctx.fill();
 
@@ -426,7 +495,29 @@
       ctx.lineTo(cx, kinkY);
       ctx.closePath();
       ctx.fill();
+      // optional third facet: a mid-tone centre wedge, offset toward the
+      // light, rounds the tree out
+      if ((t.faces || 2) >= 3) {
+        var midTone = shade(mix(col.light, col.dark), f * 24);
+        ctx.fillStyle = midTone;
+        ctx.beginPath();
+        ctx.moveTo(cx, apexY);
+        ctx.lineTo(cx - halfW * 0.42, baseY + (kinkY - baseY) * 0.35);
+        ctx.lineTo(cx, kinkY);
+        ctx.lineTo(cx + halfW * 0.18, baseY + (kinkY - baseY) * 0.5);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
+  }
+
+  // midpoint of two #rrggbb colours (returns #rrggbb so shade() can use it)
+  function mix(a, b) {
+    var va = parseInt(a.slice(1), 16), vb = parseInt(b.slice(1), 16);
+    var r = ((va >> 16) + (vb >> 16)) >> 1;
+    var g = (((va >> 8) & 255) + ((vb >> 8) & 255)) >> 1;
+    var bl = ((va & 255) + (vb & 255)) >> 1;
+    return '#' + ((1 << 24) | (r << 16) | (g << 8) | bl).toString(16).slice(1);
   }
 
   // Deciduous: stacked faceted lobes over a visible trunk (reference img 3).
@@ -448,10 +539,17 @@
     ctx.lineTo(s.x + r * 0.08, s.y - lift);
     ctx.stroke();
 
+    // 3-5 lobes: wide at the bottom, tightening toward a lighter crown
     var rot = t.rot || 0;
-    lobe(ctx, s.x - r * 0.5, s.y - lift - r * 0.05, r * 0.62, rot + 1, col, -6);
-    lobe(ctx, s.x + r * 0.52, s.y - lift + r * 0.02, r * 0.58, rot + 3, col, -10);
-    lobe(ctx, s.x, s.y - lift - r * 0.5, r * 0.8, rot, col, 8);
+    var lobes = t.lobes || 3;
+    for (var i = 0; i < lobes; i++) {
+      var f = lobes === 1 ? 1 : i / (lobes - 1);
+      var ang = rot + i * 2.4;
+      var lx = s.x + Math.cos(ang) * r * 0.55 * (1 - f * 0.75);
+      var ly = s.y - lift - f * r * 0.85 + Math.sin(ang) * r * 0.12;
+      var lr = r * (0.72 - f * 0.22);
+      lobe(ctx, lx, ly, lr, rot + i * 1.3, col, -10 + f * 20);
+    }
   }
 
   function lobe(ctx, cx, cy, r, rot, col, lightBoost) {
@@ -895,6 +993,322 @@
     }
   }
 
+  // ---------- ambient wildlife ----------
+  // Visual-only life: birds overhead, fish jumping in the sea, ducks on
+  // water hazards, a turtle on the beach, a deer at the treeline.
+
+  var Ambient = {
+    birds: null, birdTimer: 4000,
+    fish: null, fishTimer: 3000, splashes: [],
+    ducks: [],
+    turtle: null,
+    deer: null, deerTimer: 7000,
+
+    reset: function (h) {
+      this.birds = null; this.fish = null; this.deer = null;
+      this.splashes = [];
+      this.ducks = [];
+      var self = this;
+      h.waters.forEach(function (pond) {
+        var c = polyCentroid(pond);
+        for (var i = 0; i < 2; i++) {
+          self.ducks.push({
+            pond: pond, cx: c.x, cy: c.y,
+            x: c.x + (Math.random() - 0.5) * 6, y: c.y + (Math.random() - 0.5) * 6,
+            heading: Math.random() * TAU, phase: Math.random() * TAU,
+          });
+        }
+      });
+      // one slow turtle somewhere on the beach
+      var b = h.bounds;
+      for (var t = 0; t < 80; t++) {
+        var p = { x: b.minX + Math.random() * (b.maxX - b.minX), y: b.minY + Math.random() * (b.maxY - b.minY) };
+        if (Course.terrainAt(h, p) === 'sand') {
+          this.turtle = { x: p.x, y: p.y, heading: Math.random() * TAU, phase: 0 };
+          break;
+        }
+      }
+    },
+
+    update: function (dt, h, R) {
+      var sec = dt / 1000;
+
+      // birds (screen space)
+      if (this.birds) {
+        this.birds.x += this.birds.vx * sec;
+        if (this.birds.x < -80 || this.birds.x > R.w + 80) this.birds = null;
+      } else if ((this.birdTimer -= dt) < 0) {
+        this.birdTimer = 9000 + Math.random() * 7000;
+        var ltr = Math.random() < 0.5;
+        this.birds = {
+          x: ltr ? -60 : R.w + 60, y: R.h * (0.08 + Math.random() * 0.3),
+          vx: (ltr ? 1 : -1) * (50 + Math.random() * 25),
+          n: 2 + Math.floor(Math.random() * 3), phase: Math.random() * TAU,
+        };
+      }
+
+      // fish (world space, in open sea)
+      if (this.fish) {
+        this.fish.t += sec / 1.15;
+        if (this.fish.t >= 1) {
+          this.splashes.push({ x: this.fish.x2, y: this.fish.y2, t0: performance.now() });
+          this.fish = null;
+        }
+      } else if ((this.fishTimer -= dt) < 0) {
+        this.fishTimer = 7000 + Math.random() * 6000;
+        var spot = seaSpot(h);
+        if (spot) {
+          var a = Math.random() * TAU;
+          this.fish = {
+            x1: spot.x, y1: spot.y,
+            x2: spot.x + Math.cos(a) * 4, y2: spot.y + Math.sin(a) * 4,
+            t: 0,
+          };
+          this.splashes.push({ x: spot.x, y: spot.y, t0: performance.now() });
+        }
+      }
+
+      // ducks paddle, wander, stay on their pond
+      this.ducks.forEach(function (d) {
+        d.heading += (Math.random() - 0.5) * 1.6 * sec;
+        var nx = d.x + Math.sin(d.heading) * 0.55 * sec;
+        var ny = d.y + Math.cos(d.heading) * 0.55 * sec;
+        if (Course.pointInPoly({ x: nx, y: ny }, d.pond)) { d.x = nx; d.y = ny; }
+        else d.heading = Math.atan2(d.cx - d.x, d.cy - d.y);
+      });
+
+      // turtle inches along the beach
+      if (this.turtle) {
+        var tu = this.turtle;
+        tu.phase += sec * 2;
+        var tnx = tu.x + Math.sin(tu.heading) * 0.14 * sec;
+        var tny = tu.y + Math.cos(tu.heading) * 0.14 * sec;
+        if (Course.terrainAt(h, { x: tnx, y: tny }) === 'sand') { tu.x = tnx; tu.y = tny; }
+        else tu.heading += 1.4;
+      }
+
+      // deer: appears near trees, grazes, slips away
+      if (this.deer) {
+        this.deer.age += dt;
+        if (this.deer.age > this.deer.life) this.deer = null;
+      } else if ((this.deerTimer -= dt) < 0) {
+        this.deerTimer = 14000 + Math.random() * 10000;
+        var trees = h.trees.filter(function (t) { return t.kind !== 'palm'; });
+        if (trees.length) {
+          var tr = trees[Math.floor(Math.random() * trees.length)];
+          var dp = { x: tr.x + 2.5, y: tr.y + 2 };
+          if (Course.terrainAt(h, dp) === 'rough') {
+            this.deer = { x: dp.x, y: dp.y, flip: Math.random() < 0.5 ? 1 : -1, age: 0, life: 6500 + Math.random() * 3000, phase: Math.random() * TAU };
+          }
+        }
+      }
+    },
+
+    // fish + splash rings (drawn between sea and island)
+    drawSeaLife: function (R) {
+      var ctx = R.ctx;
+      if (this.fish) {
+        var f = this.fish;
+        var p = f.t;
+        var x = f.x1 + (f.x2 - f.x1) * p;
+        var y = f.y1 + (f.y2 - f.y1) * p;
+        var s = R.toScreen({ x: x, y: y });
+        var hgt = Math.sin(Math.PI * p) * 2.4 * R.cam.scale;
+        var ang = Math.atan2(f.x2 - f.x1, -(f.y2 - f.y1)) + (p < 0.5 ? -0.9 : 0.9);
+        var u = R.cam.scale * 0.9;
+        ctx.save();
+        ctx.translate(s.x, s.y - hgt);
+        ctx.rotate(ang);
+        ctx.fillStyle = '#9fcfdd';
+        ctx.beginPath();
+        ctx.moveTo(0, -u * 1.1);
+        ctx.quadraticCurveTo(u * 0.55, 0, u * 0.22, u * 0.8);
+        ctx.lineTo(-u * 0.22, u * 1.2);
+        ctx.lineTo(-u * 0.5, u * 0.7);
+        ctx.quadraticCurveTo(-u * 0.4, -u * 0.3, 0, -u * 1.1);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+      var now = performance.now();
+      this.splashes = this.splashes.filter(function (sp) { return now - sp.t0 < 900; });
+      for (var i = 0; i < this.splashes.length; i++) {
+        var sp = this.splashes[i];
+        var age = (now - sp.t0) / 900;
+        var ss = R.toScreen(sp);
+        ctx.strokeStyle = 'rgba(255,255,255,' + (0.65 * (1 - age)) + ')';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(ss.x, ss.y, (1 + age * 4) * R.cam.scale * 0.6,
+          (1 + age * 4) * R.cam.scale * 0.6 * R.cam.tilt, 0, 0, TAU);
+        ctx.stroke();
+      }
+    },
+
+    // ducks, turtle, deer (drawn after ground, before trees → deer can
+    // stand behind trees)
+    drawLand: function (R) {
+      var ctx = R.ctx;
+      var sc = R.cam.scale;
+
+      this.ducks.forEach(function (d) {
+        var s = R.toScreen(d);
+        var u = sc * 0.8;
+        var bob = Math.sin(performance.now() / 600 + d.phase) * u * 0.12;
+        var dir = Math.sin(d.heading) >= 0 ? 1 : -1;
+        // wake
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(s.x - dir * u * 1.2, s.y + u * 0.35);
+        ctx.lineTo(s.x - dir * u * 2.4, s.y + u * 0.7);
+        ctx.moveTo(s.x - dir * u * 1.2, s.y - u * 0.05);
+        ctx.lineTo(s.x - dir * u * 2.4, s.y - u * 0.35);
+        ctx.stroke();
+        // body + mallard head
+        ctx.fillStyle = '#9c7c50';
+        ctx.beginPath();
+        ctx.ellipse(s.x, s.y + bob, u * 1.05, u * 0.6, 0, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#fdf8ec';
+        ctx.beginPath();
+        ctx.arc(s.x + dir * u * 0.75, s.y - u * 0.5 + bob, u * 0.3, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#2e7d4f';
+        ctx.beginPath();
+        ctx.arc(s.x + dir * u * 0.85, s.y - u * 0.62 + bob, u * 0.34, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#e8b93d';
+        ctx.beginPath();
+        ctx.moveTo(s.x + dir * u * 1.15, s.y - u * 0.62 + bob);
+        ctx.lineTo(s.x + dir * u * 1.55, s.y - u * 0.52 + bob);
+        ctx.lineTo(s.x + dir * u * 1.12, s.y - u * 0.42 + bob);
+        ctx.closePath();
+        ctx.fill();
+      });
+
+      if (this.turtle) {
+        var tu = this.turtle;
+        var s = R.toScreen(tu);
+        var u = sc * 0.7;
+        var step = Math.sin(tu.phase) * u * 0.1;
+        var dir = Math.sin(tu.heading) >= 0 ? 1 : -1;
+        ctx.fillStyle = 'rgba(120,100,60,0.3)';
+        ctx.beginPath();
+        ctx.ellipse(s.x + u * 0.3, s.y + u * 0.15, u * 1.2, u * 0.5, 0, 0, TAU);
+        ctx.fill();
+        // flippers
+        ctx.fillStyle = '#5f8f4a';
+        [[-0.9, -0.35], [0.7, -0.4], [-0.85, 0.4], [0.75, 0.42]].forEach(function (fp, i) {
+          ctx.beginPath();
+          ctx.ellipse(s.x + fp[0] * u + (i % 2 ? step : -step), s.y + fp[1] * u, u * 0.32, u * 0.16, fp[0], 0, TAU);
+          ctx.fill();
+        });
+        // head
+        ctx.beginPath();
+        ctx.arc(s.x + dir * u * 1.1, s.y - u * 0.15, u * 0.26, 0, TAU);
+        ctx.fill();
+        // shell: dark rim + lighter faceted top
+        ctx.fillStyle = '#4a7a3e';
+        ctx.beginPath();
+        ctx.ellipse(s.x, s.y - u * 0.15, u * 0.95, u * 0.62, 0, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#6faf56';
+        ctx.beginPath();
+        ctx.moveTo(s.x - u * 0.55, s.y - u * 0.25);
+        ctx.lineTo(s.x - u * 0.1, s.y - u * 0.72);
+        ctx.lineTo(s.x + u * 0.5, s.y - u * 0.55);
+        ctx.lineTo(s.x + u * 0.6, s.y - u * 0.05);
+        ctx.lineTo(s.x, s.y + u * 0.2);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      if (this.deer) {
+        var de = this.deer;
+        var s = R.toScreen(de);
+        var u = sc * 0.85;
+        var fade = Math.min(1, de.age / 400, (de.life - de.age) / 400);
+        var graze = Math.max(0, Math.sin(de.age / 1200 + de.phase)) * u * 0.55;
+        var f = de.flip;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, fade);
+        dropShadow(R, s.x, s.y, u * 2.4, u * 1.5);
+        // legs
+        ctx.strokeStyle = '#8a6238';
+        ctx.lineWidth = Math.max(1.2, u * 0.16);
+        [[-0.8, -0.55], [-0.35, -0.6], [0.35, -0.58], [0.8, -0.5]].forEach(function (lg) {
+          ctx.beginPath();
+          ctx.moveTo(s.x + lg[0] * u * f, s.y - u * 1.1);
+          ctx.lineTo(s.x + (lg[0] + lg[1] * 0.06) * u * f, s.y);
+          ctx.stroke();
+        });
+        // body
+        ctx.fillStyle = '#a9743f';
+        ctx.beginPath();
+        ctx.ellipse(s.x, s.y - u * 1.35, u * 1.15, u * 0.62, 0, 0, TAU);
+        ctx.fill();
+        // neck + head (dips to graze)
+        var hx = s.x + f * u * 1.35, hy = s.y - u * 2.1 + graze;
+        ctx.beginPath();
+        ctx.moveTo(s.x + f * u * 0.7, s.y - u * 1.6);
+        ctx.lineTo(hx - f * u * 0.15, hy);
+        ctx.lineTo(hx + f * u * 0.1, hy + u * 0.3);
+        ctx.lineTo(s.x + f * u * 0.85, s.y - u * 1.05);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(hx, hy, u * 0.38, u * 0.26, f * 0.4, 0, TAU);
+        ctx.fill();
+        // ears + tail
+        ctx.beginPath();
+        ctx.ellipse(hx - f * u * 0.25, hy - u * 0.3, u * 0.2, u * 0.09, f * 0.9, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#f4ead6';
+        ctx.beginPath();
+        ctx.arc(s.x - f * u * 1.1, s.y - u * 1.5, u * 0.16, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
+    },
+
+    // birds (screen space, above everything)
+    drawAir: function (R) {
+      if (!this.birds) return;
+      var ctx = R.ctx;
+      var bd = this.birds;
+      var now = performance.now();
+      ctx.strokeStyle = 'rgba(40,60,72,0.75)';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      for (var i = 0; i < bd.n; i++) {
+        var bx = bd.x - i * 26 * Math.sign(bd.vx) + Math.sin(bd.phase + i * 2) * 8;
+        var by = bd.y + (i % 2) * 14 + Math.sin(now / 900 + i) * 4;
+        var flap = Math.sin(now / 140 + bd.phase + i * 1.4) * 0.55;
+        var w = 8;
+        ctx.beginPath();
+        ctx.moveTo(bx - w, by - w * (0.55 - flap));
+        ctx.quadraticCurveTo(bx - w * 0.3, by + w * flap * 0.6, bx, by);
+        ctx.quadraticCurveTo(bx + w * 0.3, by + w * flap * 0.6, bx + w, by - w * (0.55 - flap));
+        ctx.stroke();
+      }
+    },
+  };
+
+  // spot in open sea, comfortably clear of the island
+  function seaSpot(h) {
+    var b = h.bounds;
+    var cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
+    var rad = Math.max(b.maxX - b.minX, b.maxY - b.minY) * 0.5;
+    for (var i = 0; i < 30; i++) {
+      var a = Math.random() * TAU;
+      var d = rad + 14 + Math.random() * 22;
+      var p = { x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d };
+      if (!Course.pointInPoly(p, h.beachPoly)) return p;
+    }
+    return null;
+  }
+
   // ---------- lab page plumbing ----------
 
   function fitView(snap) {
@@ -917,6 +1331,7 @@
     fitView(false);
     renderer.tickCamera(dt);
     var h = hole();
+    if (styled) Ambient.update(dt, h, renderer);
     renderer.draw({
       hole: h,
       time: now,
