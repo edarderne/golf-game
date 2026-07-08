@@ -775,7 +775,7 @@
     var mouthW = 0.4 + rng.next() * 0.4;
     var mouthY = 0.68 + rng.next() * 0.1;
     var eyeH = 0.07 + rng.next() * 0.05;
-    var topknot = rng.chance(0.35);
+    rng.next(); // keep the rng stream stable (was the topknot roll)
     var light = st.tint ? '#d5bd74' : '#c3cad2';
     var mid = st.tint ? '#b39a4e' : '#9aa3ad';
     var dark = st.tint ? '#8f7a3a' : '#747d88';
@@ -849,19 +849,6 @@
     // mouth
     ctx.fillStyle = darker;
     ctx.fillRect(s.x - fw * mouthW * 0.5, top + hgt * mouthY, fw * mouthW, Math.max(1, hgt * 0.045));
-
-    // pukao topknot
-    if (topknot) {
-      var pkW = fw * 0.85, pkH = w * 0.55;
-      ctx.fillStyle = '#a34f35';
-      ctx.fillRect(s.x - pkW, top - pkH + w * 0.06, pkW * 2, pkH);
-      ctx.fillStyle = '#8a3f2a';
-      ctx.fillRect(s.x + pkW * 0.3, top - pkH + w * 0.06, pkW * 0.7, pkH);
-      ctx.fillStyle = '#bf6a4a';
-      ctx.beginPath();
-      ctx.ellipse(s.x, top - pkH + w * 0.06, pkW, pkW * 0.32, 0, 0, TAU);
-      ctx.fill();
-    }
 
     // scattered faceted stones at the base
     var stones = 2 + Math.floor(rng.next() * 3);

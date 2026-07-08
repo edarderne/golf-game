@@ -83,6 +83,7 @@
         <span id="wind-speed">calm</span>
       </div>
       <button id="btn-scorecard" class="btn small">📋</button>
+      <button id="btn-menu" class="btn small">☰</button>
     </div>
 
     <div id="players-strip"></div>
@@ -117,6 +118,17 @@
         <p id="summary-line"></p>
         <div id="summary-body" class="scorecard"></div>
         <p class="status">Next hole coming up…</p>
+      </div>
+    </div>
+
+    <!-- in-game menu -->
+    <div id="overlay-menu" class="overlay">
+      <div class="panel">
+        <h2>Game menu</h2>
+        <button id="btn-resume" class="btn primary">Resume</button>
+        <button id="btn-restart" class="btn">Restart round</button>
+        <button id="btn-abandon" class="btn">Abandon match</button>
+        <p id="menu-note" class="status"></p>
       </div>
     </div>
 

@@ -35,9 +35,11 @@
     ducks: [],
     turtle: null,
     deer: null, deerTimer: 7000,
+    yeti: null, yetiTimer: 90000,
 
     reset: function (h) {
       this.birds = null; this.fish = null; this.deer = null; this.whale = null;
+      this.yeti = null;
       this.splashes = [];
       this.ducks = [];
       this.deerTimer = 5000 + Math.random() * 8000;
@@ -176,6 +178,32 @@
               walk: 0, phase: Math.random() * TAU,
             };
           }
+        }
+      }
+
+      // the yeti: legendary. Every couple of minutes there's only a small
+      // chance he shows up at all — then he sprints clear across the island.
+      if (this.yeti) {
+        var ye = this.yeti;
+        ye.age += dt;
+        var ystep = 6.5 * sec;
+        ye.x += Math.sin(ye.heading) * ystep;
+        ye.y += Math.cos(ye.heading) * ystep;
+        ye.run += ystep * 1.6;
+        var yterr = Course.terrainAt(h, { x: ye.x, y: ye.y });
+        if (yterr === 'water' || ye.age > 16000) this.yeti = null;
+      } else if ((this.yetiTimer -= dt) < 0) {
+        this.yetiTimer = 100000 + Math.random() * 80000;
+        if (Math.random() < 0.3) { // ~1 sighting every 8-10 minutes
+          var gp = h.grassPoly;
+          var vi = Math.floor(Math.random() * gp.length);
+          var entry = gp[vi];
+          var exit = gp[(vi + (gp.length >> 1)) % gp.length];
+          var yh = Math.atan2(exit.x - entry.x, exit.y - entry.y);
+          this.yeti = {
+            x: entry.x + Math.sin(yh) * 2, y: entry.y + Math.cos(yh) * 2,
+            heading: yh, run: 0, age: 0,
+          };
         }
       }
     },
@@ -381,6 +409,65 @@
         ctx.beginPath();
         ctx.arc(s.x - f * u * 1.1, s.y - u * 1.5, u * 0.16, 0, TAU);
         ctx.fill();
+        ctx.restore();
+      }
+
+      if (this.yeti) {
+        var ye = this.yeti;
+        var s = R.toScreen(ye);
+        var u = sc * 1.05;
+        var f = Math.sin(ye.heading) >= 0 ? 1 : -1;
+        var bounce = Math.abs(Math.sin(ye.run * 2)) * u * 0.25;
+        var fade = Math.min(1, ye.age / 300, (16000 - ye.age) / 400);
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, fade));
+        R.dropShadow(s.x, s.y, u * 1.8, u * 2.2);
+        var by = s.y - u * 1.5 - bounce; // body centre, bobbing with the sprint
+        // running legs
+        ctx.strokeStyle = '#dfe6ea';
+        ctx.lineWidth = Math.max(2, u * 0.34);
+        ctx.lineCap = 'round';
+        for (var li = 0; li < 2; li++) {
+          var kick = Math.sin(ye.run * 2 + li * Math.PI) * u * 0.55;
+          ctx.beginPath();
+          ctx.moveTo(s.x, by + u * 0.5);
+          ctx.lineTo(s.x + kick * f - f * u * 0.15, s.y - bounce * 0.3);
+          ctx.stroke();
+        }
+        // shaggy body
+        ctx.fillStyle = '#eef2f5';
+        ctx.beginPath();
+        ctx.ellipse(s.x, by, u * 0.85, u * 1.05, f * 0.12, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#d3dce2';
+        ctx.beginPath();
+        ctx.ellipse(s.x + f * u * 0.25, by + u * 0.15, u * 0.55, u * 0.75, f * 0.2, 0, TAU);
+        ctx.fill();
+        // swinging arms
+        ctx.strokeStyle = '#eef2f5';
+        ctx.lineWidth = Math.max(2, u * 0.3);
+        for (li = 0; li < 2; li++) {
+          var swing = Math.sin(ye.run * 2 + li * Math.PI + 1.2) * u * 0.5;
+          ctx.beginPath();
+          ctx.moveTo(s.x - f * u * 0.1, by - u * 0.35);
+          ctx.lineTo(s.x + swing * f + f * u * 0.5, by + u * 0.35);
+          ctx.stroke();
+        }
+        // head, leaning into the run
+        var hx = s.x + f * u * 0.55, hy = by - u * 1.15;
+        ctx.fillStyle = '#eef2f5';
+        ctx.beginPath();
+        ctx.arc(hx, hy, u * 0.5, 0, TAU);
+        ctx.fill();
+        // dark face
+        ctx.fillStyle = '#5b6670';
+        ctx.beginPath();
+        ctx.ellipse(hx + f * u * 0.14, hy + u * 0.05, u * 0.28, u * 0.32, 0, 0, TAU);
+        ctx.fill();
+        // eyes
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(hx + f * u * 0.08, hy - u * 0.05, u * 0.06, 0, TAU); ctx.fill();
+        ctx.beginPath(); ctx.arc(hx + f * u * 0.26, hy - u * 0.05, u * 0.06, 0, TAU); ctx.fill();
         ctx.restore();
       }
     },

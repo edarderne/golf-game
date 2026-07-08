@@ -283,6 +283,10 @@ input:focus { outline: none; border-color: var(--green); }
   font-style: normal; font-size: 0.7rem; opacity: 0.65; font-weight: 700;
 }
 
+/* in-game menu */
+#overlay-menu .btn { width: 100%; margin-top: 10px; }
+#overlay-menu .btn.danger { background: #f3d9d4; color: #9c3a2b; }
+
 /* trophy cabinet */
 #cabinet { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 8px 0 14px; }
 .trophy {

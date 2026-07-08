@@ -300,6 +300,13 @@
       $('overlay-leaderboard').classList.remove('show');
     });
 
+    $('btn-menu').addEventListener('click', openMenu);
+    $('btn-resume').addEventListener('click', function () {
+      $('overlay-menu').classList.remove('show');
+    });
+    $('btn-restart').addEventListener('click', restartRound);
+    $('btn-abandon').addEventListener('click', abandonGame);
+
     $('btn-scorecard').addEventListener('click', function () {
       var el = $('overlay-scorecard');
       if (el.classList.contains('show')) el.classList.remove('show');
@@ -389,12 +396,72 @@
     $('overlay-summary').classList.remove('show');
     $('overlay-final').classList.remove('show');
     $('overlay-scorecard').classList.remove('show');
+    $('overlay-menu').classList.remove('show');
     var wasTourney = !!tourney;
     tourney = null;
     phase = 'home';
     if (wasTourney) openTournament(); // back to the standings
     else showScreen('home');
     updateCreator();
+  }
+
+  // ---------- in-game menu: restart / abandon ----------
+
+  function openMenu() {
+    if (!room) return;
+    var restart = $('btn-restart');
+    var abandon = $('btn-abandon');
+    var note = $('menu-note');
+    if (tourney) {
+      restart.style.display = 'none';
+      abandon.textContent = 'Quit (forfeit attempt)';
+      abandon.classList.add('danger');
+      note.textContent = 'One attempt per day: quitting cards the max on the holes you haven’t finished and submits that score.';
+    } else if (conn.isLocal) {
+      restart.style.display = '';
+      abandon.textContent = 'Quit to menu';
+      abandon.classList.remove('danger');
+      note.textContent = 'Practice rounds aren’t recorded unless you finish them.';
+    } else {
+      restart.style.display = 'none';
+      abandon.textContent = 'Abandon match';
+      abandon.classList.add('danger');
+      note.textContent = 'Ends the game for both players — the scorecard so far stands.';
+    }
+    $('overlay-menu').classList.add('show');
+  }
+
+  // Practice only: same length round, fresh islands.
+  function restartRound() {
+    $('overlay-menu').classList.remove('show');
+    var holes = room.meta.holes;
+    if (conn) conn.close();
+    myUid = myUid || 'me';
+    var c = new LocalConn(holes, me);
+    c.room.players = {};
+    c.room.players[myUid] = { name: playerName(), char: me };
+    enterRoom(c, null);
+  }
+
+  function abandonGame() {
+    $('overlay-menu').classList.remove('show');
+    if (tourney) {
+      // one attempt per day: card the max on unfinished holes and submit
+      var strokes = 0, par = 0;
+      for (var i = 0; i < room.meta.holes; i++) {
+        var sc = scoreOf(myUid, i);
+        strokes += sc != null ? sc : STROKE_CAP;
+        par += course[i].par;
+      }
+      submitTourneyResult({ h: room.meta.holes, s: strokes, p: par });
+      leaveGame();
+    } else if (conn.isLocal) {
+      leaveGame();
+    } else {
+      // end the match for both players, then leave
+      conn.write({ 'meta/status': 'done', 'game/abandonedBy': myUid });
+      leaveGame();
+    }
   }
 
   function rematch() {
@@ -838,6 +905,11 @@
         var w = t[a].total < t[b].total ? a : b;
         title = '🏆 ' + playerNameOf(w) + ' wins!';
       } else title = '🤝 All square!';
+    }
+    if (game().abandonedBy) {
+      title = game().abandonedBy === myUid
+        ? 'You left the game'
+        : '🏳️ ' + playerNameOf(game().abandonedBy) + ' abandoned the match';
     }
     recordMyRound();
     if (tourney) {
