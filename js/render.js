@@ -171,10 +171,10 @@
     if (close !== false) ctx.closePath();
   };
 
-  Renderer.prototype.blobPath = function (pts) {
+  Renderer.prototype.blobPath = function (pts, append) {
     var ctx = this.ctx;
     var n = pts.length;
-    ctx.beginPath();
+    if (!append) ctx.beginPath();
     var p0 = this.toScreen(pts[0]), p1 = this.toScreen(pts[1]);
     ctx.moveTo((p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
     for (var i = 1; i <= n; i++) {
@@ -274,38 +274,45 @@
   Renderer.prototype.drawGround = function (hole, state) {
     var ctx = this.ctx;
     var sc = this.cam.scale;
+    var islands = hole.islands || [{ grass: hole.grassPoly, beach: hole.beachPoly }];
+    var k;
 
-    // depth ring: water darkens right around the island
+    // depth ring: water darkens right around each island
     ctx.strokeStyle = PAL.depthRing;
-    ctx.lineWidth = sc * 16;
-    this.blobPath(hole.beachPoly);
-    ctx.stroke();
-    ctx.lineWidth = sc * 7;
-    this.blobPath(hole.beachPoly);
-    ctx.stroke();
+    for (k = 0; k < islands.length; k++) {
+      ctx.lineWidth = sc * 16;
+      this.blobPath(islands[k].beach);
+      ctx.stroke();
+      ctx.lineWidth = sc * 7;
+      this.blobPath(islands[k].beach);
+      ctx.stroke();
+    }
 
-    // island drop shadow (same direction as every object)
+    // island drop shadows (same direction as every object)
     ctx.save();
     ctx.translate(SH.x * sc * 2.4, SH.y * sc * 2.4);
-    this.blobPath(hole.beachPoly);
     ctx.fillStyle = PAL.islandShadow;
-    ctx.fill();
+    for (k = 0; k < islands.length; k++) {
+      this.blobPath(islands[k].beach);
+      ctx.fill();
+    }
     ctx.restore();
 
     // pulsing foam
     var pulse = 0.55 + Math.sin(this.time / 900) * 0.2;
-    this.blobPath(hole.beachPoly);
-    ctx.strokeStyle = 'rgba(255,255,255,' + pulse + ')';
-    ctx.lineWidth = Math.max(2, sc * 2.2);
-    ctx.stroke();
-    this.blobPath(hole.beachPoly);
-    ctx.strokeStyle = PAL.foam;
-    ctx.lineWidth = Math.max(1.5, sc * 1.2);
-    ctx.stroke();
-
-    this.blobPath(hole.beachPoly);
-    ctx.fillStyle = PAL.sand;
-    ctx.fill();
+    for (k = 0; k < islands.length; k++) {
+      this.blobPath(islands[k].beach);
+      ctx.strokeStyle = 'rgba(255,255,255,' + pulse + ')';
+      ctx.lineWidth = Math.max(2, sc * 2.2);
+      ctx.stroke();
+      this.blobPath(islands[k].beach);
+      ctx.strokeStyle = PAL.foam;
+      ctx.lineWidth = Math.max(1.5, sc * 1.2);
+      ctx.stroke();
+      this.blobPath(islands[k].beach);
+      ctx.fillStyle = PAL.sand;
+      ctx.fill();
+    }
 
     // beach speckle
     if (hole.sandDots) {
@@ -319,9 +326,11 @@
       }
     }
 
-    this.blobPath(hole.grassPoly);
-    ctx.fillStyle = PAL.rough;
-    ctx.fill();
+    for (k = 0; k < islands.length; k++) {
+      this.blobPath(islands[k].grass);
+      ctx.fillStyle = PAL.rough;
+      ctx.fill();
+    }
 
     // rough texture dots
     ctx.fillStyle = PAL.roughDot;
@@ -334,10 +343,14 @@
       ctx.fill();
     }
 
-    // fairway
+    // fairway, clipped to land so cross-island holes show sea in the gap
+    ctx.save();
+    for (k = 0; k < islands.length; k++) this.blobPath(islands[k].grass, k > 0);
+    ctx.clip();
     this.poly(hole.fairwayPoly);
     ctx.fillStyle = PAL.fairway;
     ctx.fill();
+    ctx.restore();
 
     // low-poly tone patches
     if (hole.patches) {
@@ -363,9 +376,9 @@
     this.groundEllipse(hole.tee, 4);
     ctx.fill();
 
-    // green with slope shading
+    // green with slope shading (polygon so ovals/rotations project correctly)
     ctx.fillStyle = PAL.fringe;
-    this.groundEllipse(hole.green, hole.greenR + 2.5);
+    if (hole.fringePoly) this.blobPath(hole.fringePoly); else this.groundEllipse(hole.green, hole.greenR + 2.5);
     ctx.fill();
     var gc = this.toScreen(hole.green);
     var rpx = hole.greenR * sc;
@@ -378,7 +391,7 @@
     grad.addColorStop(0, PAL.greenHi);
     grad.addColorStop(1, PAL.greenLo);
     ctx.fillStyle = grad;
-    this.groundEllipse(hole.green, hole.greenR);
+    if (hole.greenPoly) this.blobPath(hole.greenPoly); else this.groundEllipse(hole.green, hole.greenR);
     ctx.fill();
     this.drawSlopeArrows(hole, gdx, gdy);
 

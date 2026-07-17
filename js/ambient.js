@@ -13,17 +13,27 @@
     return { x: cx / poly.length, y: cy / poly.length };
   }
 
+  function insideAnyIsland(h, p) {
+    var isls = h.islands || [{ beach: h.beachPoly }];
+    for (var i = 0; i < isls.length; i++) {
+      if (Course.pointInPoly(p, isls[i].beach)) return true;
+    }
+    return false;
+  }
+
   // spot in the sea between minM and maxM yards off the shoreline
   function seaSpot(h, minM, maxM) {
     var b = h.bounds;
     var cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
+    var isls = h.islands || [{ beach: h.beachPoly }];
     for (var i = 0; i < 30; i++) {
-      var v = h.beachPoly[Math.floor(Math.random() * h.beachPoly.length)];
+      var beach = isls[Math.floor(Math.random() * isls.length)].beach;
+      var v = beach[Math.floor(Math.random() * beach.length)];
       var dx = v.x - cx, dy = v.y - cy;
       var dl = Math.sqrt(dx * dx + dy * dy) || 1;
       var m = minM + Math.random() * (maxM - minM);
       var p = { x: v.x + (dx / dl) * m, y: v.y + (dy / dl) * m };
-      if (!Course.pointInPoly(p, h.beachPoly)) return p;
+      if (!insideAnyIsland(h, p)) return p;
     }
     return null;
   }

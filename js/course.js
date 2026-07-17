@@ -58,6 +58,64 @@
     return pts;
   }
 
+  // Elliptical blob: like blob() but with independent radii + a rotation, so
+  // greens can be ovals and ponds can be long lakes, not only circles. rx is
+  // the radius along the local x-axis (which is rotated to `ang`).
+  function ellipseBlob(rng, cx, cy, rx, ry, ang, wobble, n) {
+    var pts = [];
+    var phase = rng.next() * TAU;
+    var ca = Math.cos(ang), sa = Math.sin(ang);
+    for (var i = 0; i < n; i++) {
+      var a = (i / n) * TAU;
+      var w = 1 + wobble * Math.sin(a * 3 + phase) * 0.5 + wobble * (rng.next() - 0.5);
+      var ex = Math.cos(a) * rx * w, ey = Math.sin(a) * ry * w;
+      pts.push({ x: cx + ex * ca - ey * sa, y: cy + ex * sa + ey * ca });
+    }
+    return pts;
+  }
+
+  // Crescent pond: an annular sector hugging the OUTSIDE of the green from
+  // angle a0 over `sweep` radians (a quarter/third/half wrap).
+  function arcPond(rng, cx, cy, innerR, thick, a0, sweep, n) {
+    var steps = Math.max(6, Math.round(n * sweep / TAU));
+    var phase = rng.next() * TAU;
+    var outer = [], inner = [];
+    for (var i = 0; i <= steps; i++) {
+      var a = a0 + sweep * (i / steps);
+      var wob = 1 + 0.1 * Math.sin(a * 4 + phase);
+      outer.push({ x: cx + Math.cos(a) * (innerR + thick * wob), y: cy + Math.sin(a) * (innerR + thick * wob) });
+      inner.push({ x: cx + Math.cos(a) * innerR, y: cy + Math.sin(a) * innerR });
+    }
+    return outer.concat(inner.reverse());
+  }
+
+  // Green outline: an aspect-ratio ellipse warped by two low harmonics so
+  // shapes range from round to long ovals to kidneys/peanuts. h2 drives the
+  // dominant lobe (kidney), h3 a finer waver; both rotated by `ang`.
+  function greenBlob(rng, cx, cy, base, aspect, ang, h2, ph2, h3, ph3, n) {
+    var pts = [];
+    var ca = Math.cos(ang), sa = Math.sin(ang);
+    var rx = base, ry = base * aspect;
+    for (var i = 0; i < n; i++) {
+      var a = (i / n) * TAU;
+      var w = 1 + h2 * Math.sin(a * 2 + ph2) + h3 * Math.sin(a * 3 + ph3) + 0.05 * (rng.next() - 0.5);
+      var ex = Math.cos(a) * rx * w, ey = Math.sin(a) * ry * w;
+      pts.push({ x: cx + ex * ca - ey * sa, y: cy + ex * sa + ey * ca });
+    }
+    return pts;
+  }
+
+  // Sustained neck reduction: full fraction `f` across [t0..t1] with cosine
+  // shoulders of width `sh`, so the island stays pinched over a stretch
+  // (rather than a single spike). Returns 0..f.
+  function neckReduction(t, p) {
+    if (t <= p.t0 - p.sh || t >= p.t1 + p.sh) return 0;
+    if (t >= p.t0 && t <= p.t1) return p.f;
+    if (t < p.t0) { var x = (t - (p.t0 - p.sh)) / p.sh; return p.f * 0.5 * (1 - Math.cos(x * Math.PI)); }
+    var x2 = ((p.t1 + p.sh) - t) / p.sh;
+    return p.f * 0.5 * (1 - Math.cos(x2 * Math.PI));
+  }
+
   // ---------- hole generation ----------
 
   var PAR_SPECS = {
@@ -108,32 +166,134 @@
     for (var i = 0; i <= N; i++) line.push(bezier(tee, ctrl, end, i / N));
 
     var fairwayW = rng.range(26, 34);
-    var greenR = rng.range(10.5, 14);
+
+    // Greens are big and genuinely varied: a per-hole base size, aspect
+    // ratio, rotation and two shape harmonics give rounds, long ovals and
+    // kidneys. greenR is a conservative max-radius proxy for decor spacing.
+    var greenBase = par === 3 ? rng.range(11, 15) : par === 4 ? rng.range(12.5, 17) : rng.range(13.5, 19);
+    var greenAspect = rng.range(0.58, 1.72);
+    var greenAng = rng.next() * TAU;
+    var gH2 = rng.range(0, 0.34), gPh2 = rng.next() * TAU;
+    var gH3 = rng.range(0, 0.16), gPh3 = rng.next() * TAU;
     var green = { x: end.x, y: end.y };
-    var pinA = rng.next() * TAU;
-    var pinR = rng.next() * greenR * 0.45;
-    var pin = { x: green.x + Math.cos(pinA) * pinR, y: green.y + Math.sin(pinA) * pinR };
-
-    // Island (grass) and beach outlines: offset the centerline both sides
-    // with a wobbly margin, plus rounded caps past the tee and green.
-    var margin = 42 + par * 6;
-    var grassPoly = outline(rng, line, margin);
-    var beachPoly = expand(grassPoly, 9);
-
-    // Water hazards: ponds guarding the approach or flanking the fairway.
-    var waters = [];
-    if (par >= 4 && rng.chance(0.55)) {
-      var t = rng.range(0.55, 0.8);
-      var c = bezier(tee, ctrl, end, t);
-      var side = rng.chance(0.5) ? 1 : -1;
-      var off = fairwayW / 2 + rng.range(4, 14);
-      var n = normalAt(line, t);
-      waters.push(blob(rng, c.x + n.x * off * side, c.y + n.y * off * side, rng.range(14, 22), 0.35, 14));
+    var greenPoly = greenBlob(rng, green.x, green.y, greenBase, greenAspect, greenAng, gH2, gPh2, gH3, gPh3, 28);
+    var fringePoly = expand(greenPoly, 2.8);
+    var greenR = greenBase * Math.max(1, greenAspect) * (1 + gH2 * 0.7 + gH3 * 0.5);
+    // pin on the surface: a candidate near centre pulled inward until inside
+    // (robust for kidney/concave greens).
+    var pinDir = rng.next() * TAU;
+    var pinReach = (0.25 + rng.next() * 0.5) * greenBase;
+    var pin = { x: green.x + Math.cos(pinDir) * pinReach, y: green.y + Math.sin(pinDir) * pinReach };
+    for (var pg = 0; pg < 10 && !pointInPoly(pin, greenPoly); pg++) {
+      pin.x = green.x + (pin.x - green.x) * 0.72;
+      pin.y = green.y + (pin.y - green.y) * 0.72;
     }
-    if (par === 3 && rng.chance(0.5)) {
-      // Water carry in front of the green.
-      var mid = bezier(tee, ctrl, end, 0.55);
-      waters.push(blob(rng, mid.x + rng.range(-8, 8), mid.y, rng.range(13, 18), 0.3, 14));
+
+    // Signature hazard: at most one big feature per hole so difficulty stays
+    // fair. carry = split across two islands with open sea (sometimes a
+    // classic island green); narrow = a long one- or two-sided neck; guard =
+    // water at the green (tangent pond or a crescent wrapping part of it);
+    // lake = a long pond running alongside the fairway.
+    var feature;
+    if (par === 3) feature = rng.pick(['none', 'none', 'carry', 'guard', 'guard']);
+    else if (par === 4) feature = rng.pick(['none', 'guard', 'narrow', 'carry', 'lake']);
+    else feature = rng.pick(['none', 'guard', 'narrow', 'narrow', 'carry', 'lake']);
+
+    var margin = 42 + par * 6;
+    var islands = [];
+    if (feature === 'carry') {
+      // The end caps extend each island by ~its margin, so compute the split
+      // in yards with the caps included to guarantee real open sea between.
+      var splitY = (par === 3 ? rng.range(0.5, 0.62) : rng.range(0.42, 0.58)) * length;
+      var gapY = par === 3 ? rng.range(30, 48) : rng.range(44, 66);
+      var mA = margin * (par === 3 ? 0.85 : 1);
+      var teeEndT = Math.max(0.12, (splitY - gapY / 2 - mA) / length);
+      islands.push(makeIsland(rng, line, 0, teeEndT, mA, null));
+      if (par === 3 && rng.chance(0.65)) {
+        // classic island green: a tight disc of land, minimal surround, so
+        // club + power choice is everything.
+        var gRad = greenR + rng.range(7, 13);
+        var gGrass = blob(rng, green.x, green.y, gRad, 0.16, 18);
+        islands.push({ grass: gGrass, beach: expand(gGrass, 9) });
+      } else {
+        // Second landmass holds the green; occasionally shrink it to a tight
+        // "island green" target that leaves almost no room behind the flag.
+        var tightIsland = par >= 4 && rng.chance(0.4);
+        var mB = margin * (tightIsland ? 0.62 : 0.9);
+        var greenStartT = Math.min(0.9, (splitY + gapY / 2 + mB) / length + (tightIsland ? rng.range(0.05, 0.1) : 0));
+        islands.push(makeIsland(rng, line, greenStartT, 1, mB, null));
+      }
+    } else if (feature === 'narrow') {
+      // A long neck that stays pinched for a stretch — cutting in from one
+      // side (left/right) or both — so you weigh laying up short of it.
+      var nt0 = rng.range(0.24, 0.42);
+      var pinch = {
+        t0: nt0,
+        t1: nt0 + rng.range(0.3, 0.46),
+        sh: rng.range(0.07, 0.12),
+        f: rng.range(0.45, 0.66),
+        side: rng.pick(['both', 'both', 'left', 'right']),
+      };
+      islands.push(makeIsland(rng, line, 0, 1, margin, pinch));
+    } else {
+      islands.push(makeIsland(rng, line, 0, 1, margin, null));
+    }
+    var grassPoly = islands[0].grass;
+    var beachPoly = islands[0].beach;
+    var allBeach = [];
+    islands.forEach(function (isl) { allBeach.push.apply(allBeach, isl.beach); });
+
+    function onGrass(p) {
+      for (var gi = 0; gi < islands.length; gi++) {
+        if (pointInPoly(p, islands[gi].grass)) return true;
+      }
+      return false;
+    }
+
+    // Water hazards. (carry holes rely on the open sea between islands.)
+    var waters = [];
+    if (feature === 'lake') {
+      // long pond running alongside the fairway for much of its length
+      var lt = rng.range(0.42, 0.6);
+      var lc = bezier(tee, ctrl, end, lt);
+      var ln = normalAt(line, lt);
+      var lside = rng.chance(0.5) ? 1 : -1;
+      var lhalfLen = rng.range(42, 66);
+      var lhalfW = rng.range(10, 15);
+      var loff = fairwayW / 2 + rng.range(2, 8) + lhalfW;
+      var lang = Math.atan2(-ln.x, ln.y); // long axis runs along the fairway
+      waters.push(ellipseBlob(rng, lc.x + ln.x * loff * lside, lc.y + ln.y * loff * lside, lhalfLen, lhalfW, lang, 0.22, 26));
+    } else if (feature === 'guard') {
+      if (rng.chance(0.5)) {
+        // crescent wrapping a quarter–half of the green, just off the edge
+        var wa0 = rng.next() * TAU;
+        var wsweep = rng.pick([TAU * 0.22, TAU * 0.32, TAU * 0.5]);
+        waters.push(arcPond(rng, green.x, green.y, greenR + rng.range(2, 4), rng.range(7, 12), wa0, wsweep, 30));
+      } else {
+        // round pond tangent to the green — sits OUTSIDE the putting surface
+        var ga = rng.next() * TAU;
+        var gr = rng.range(9, 15);
+        var gd = greenR + gr + rng.range(2, 4.5);
+        waters.push(blob(rng, green.x + Math.cos(ga) * gd, green.y + Math.sin(ga) * gd, gr, 0.22, 14));
+      }
+    } else if (feature === 'none' || feature === 'narrow') {
+      if (par >= 4 && rng.chance(0.5)) {
+        // an elongated pond flanking the fairway
+        var t = rng.range(0.5, 0.78);
+        var c = bezier(tee, ctrl, end, t);
+        var side = rng.chance(0.5) ? 1 : -1;
+        var fn = normalAt(line, t);
+        var fHalfLen = rng.range(16, 30);
+        var fHalfW = rng.range(7, 11);
+        var off = fairwayW / 2 + rng.range(4, 12) + fHalfW;
+        var fang = Math.atan2(-fn.x, fn.y);
+        waters.push(ellipseBlob(rng, c.x + fn.x * off * side, c.y + fn.y * off * side, fHalfLen, fHalfW, fang, 0.28, 22));
+      }
+      if (par === 3 && rng.chance(0.45)) {
+        // water carry in front of the green
+        var mid = bezier(tee, ctrl, end, 0.5);
+        waters.push(blob(rng, mid.x + rng.range(-8, 8), mid.y, rng.range(15, 22), 0.3, 14));
+      }
     }
 
     // Bunkers: 1-2 hugging the green, maybe one along the fairway.
@@ -144,7 +304,7 @@
       var bd = greenR + rng.range(5, 10);
       var bx = green.x + Math.cos(ba) * bd, by = green.y + Math.sin(ba) * bd;
       // keep greenside bunkers on the island
-      if (!pointInPoly({ x: bx, y: by }, grassPoly)) continue;
+      if (!onGrass({ x: bx, y: by })) continue;
       bunkers.push(blob(rng, bx, by, rng.range(5, 8), 0.3, 12));
     }
     if (par >= 4 && rng.chance(0.6)) {
@@ -154,7 +314,7 @@
       var bside = rng.chance(0.5) ? 1 : -1;
       var boff = fairwayW / 2 + rng.range(1, 6);
       var fbx = bc.x + bn.x * boff * bside, fby = bc.y + bn.y * boff * bside;
-      if (pointInPoly({ x: fbx, y: fby }, grassPoly)) {
+      if (onGrass({ x: fbx, y: fby })) {
         bunkers.push(blob(rng, fbx, fby, rng.range(6, 9), 0.3, 12));
       }
     }
@@ -166,14 +326,16 @@
     var hole = {
       index: index, par: par, length: Math.round(length),
       tee: tee, green: green, greenR: greenR, pin: pin,
+      greenPoly: greenPoly, fringePoly: fringePoly, greenAng: greenAng,
       line: line, fairwayW: fairwayW,
       fairwayPoly: fairwayOutline(line, fairwayW / 2),
+      islands: islands, feature: feature, narrowSide: (typeof pinch !== 'undefined' && pinch) ? pinch.side : null,
       grassPoly: grassPoly, beachPoly: beachPoly,
       waters: waters, bunkers: bunkers,
       greenSlope: { x: Math.cos(slopeAng) * slopeMag, y: Math.sin(slopeAng) * slopeMag, mag: slopeMag },
       trees: [], rocks: [], statues: [], tufts: [],
       wind: { angle: rng.next() * TAU, mph: Math.round(rng.range(0, 9)) },
-      bounds: polyBounds(beachPoly, 14),
+      bounds: polyBounds(allBeach, 14),
     };
 
     scatterDecor(rng, hole);
@@ -211,22 +373,36 @@
     return { x: -dy / len, y: dx / len };
   }
 
-  function outline(rng, line, margin) {
+  // Builds one island's grass+beach outline along a stretch [t0..t1] of the
+  // centerline. `pinch` optionally narrows the island over a sustained neck
+  // (see neckReduction) on the left, right, or both sides — the "narrow"
+  // hazard.
+  function makeIsland(rng, line, t0, t1, margin, pinch) {
+    var last = line.length - 1;
+    var i0 = Math.max(0, Math.round(t0 * last));
+    var i1 = Math.min(last, Math.round(t1 * last));
+    if (i1 - i0 < 3) i1 = Math.min(last, i0 + 3);
+    var sub = line.slice(i0, i1 + 1);
     var left = [], right = [];
     var phase = rng.next() * TAU;
     var phase2 = rng.next() * TAU;
-    for (var i = 0; i < line.length; i++) {
-      var t = i / (line.length - 1);
-      var n = normalAt(line, t);
+    for (var i = 0; i < sub.length; i++) {
+      var t = (i0 + i) / last;
+      var n = normalAt(sub, i / (sub.length - 1));
       var wob = Math.sin(t * 5 + phase) * 5 + Math.sin(t * 2.3 + phase2) * 4;
-      var m = margin + wob;
-      left.push({ x: line[i].x + n.x * m, y: line[i].y + n.y * m });
-      right.push({ x: line[i].x - n.x * (margin - wob * 0.5), y: line[i].y - n.y * (margin - wob * 0.5) });
+      var ml = margin, mr = margin;
+      if (pinch) {
+        var red = neckReduction(t, pinch);
+        if (pinch.side !== 'right') ml *= 1 - red;
+        if (pinch.side !== 'left') mr *= 1 - red;
+      }
+      left.push({ x: sub[i].x + n.x * (ml + wob), y: sub[i].y + n.y * (ml + wob) });
+      right.push({ x: sub[i].x - n.x * (mr - wob * 0.5), y: sub[i].y - n.y * (mr - wob * 0.5) });
     }
-    // Rounded caps beyond tee (bottom) and green (top).
-    var capB = cap(line[0], line[1], margin, rng);
-    var capT = cap(line[line.length - 1], line[line.length - 2], margin, rng);
-    return left.concat(capT, right.reverse(), capB);
+    var capB = cap(sub[0], sub[1], margin, rng);
+    var capT = cap(sub[sub.length - 1], sub[sub.length - 2], margin, rng);
+    var grass = left.concat(capT, right.reverse(), capB);
+    return { grass: grass, beach: expand(grass, 9) };
   }
 
   function cap(tip, inner, r, rng) {
@@ -450,9 +626,12 @@
   // Approximate distance from a point (inside grass) to the island edge.
   function edgeDistance(hole, p) {
     var best = Infinity;
-    var poly = hole.grassPoly;
-    for (var i = 0; i < poly.length - 1; i += 2) {
-      best = Math.min(best, distToSeg(p, poly[i], poly[i + 1]));
+    var isls = hole.islands || [{ grass: hole.grassPoly }];
+    for (var k = 0; k < isls.length; k++) {
+      var poly = isls[k].grass;
+      for (var i = 0; i < poly.length - 1; i += 2) {
+        best = Math.min(best, distToSeg(p, poly[i], poly[i + 1]));
+      }
     }
     return best;
   }
@@ -463,13 +642,21 @@
     for (var i = 0; i < hole.waters.length; i++) {
       if (pointInPoly(p, hole.waters[i])) return 'water';
     }
-    if (!pointInPoly(p, hole.grassPoly)) {
-      return pointInPoly(p, hole.beachPoly) ? 'sand' : 'water';
+    var isls = hole.islands || [{ grass: hole.grassPoly, beach: hole.beachPoly }];
+    var onLand = false;
+    for (i = 0; i < isls.length; i++) {
+      if (pointInPoly(p, isls[i].grass)) { onLand = true; break; }
+    }
+    if (!onLand) {
+      for (i = 0; i < isls.length; i++) {
+        if (pointInPoly(p, isls[i].beach)) return 'sand';
+      }
+      return 'water';
     }
     for (i = 0; i < hole.bunkers.length; i++) {
       if (pointInPoly(p, hole.bunkers[i])) return 'sand';
     }
-    if (dist(p, hole.green) <= hole.greenR) return 'green';
+    if (hole.greenPoly ? pointInPoly(p, hole.greenPoly) : dist(p, hole.green) <= hole.greenR) return 'green';
     if (dist(p, hole.tee) <= 6) return 'tee';
     if (distToPolyline(p, hole.line) <= hole.fairwayW / 2) return 'fairway';
     return 'rough';

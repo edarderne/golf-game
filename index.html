@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Island Golf — play with a friend</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=2">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 </head>
 <body>
@@ -14,6 +14,12 @@
     <div class="panel">
       <h1>⛳ Island Golf</h1>
       <p class="sub">Build your golfer, then play a friend online.</p>
+
+      <div id="whatsnew" class="whatsnew" hidden>
+        <span class="whatsnew-tag">New</span>
+        <span class="whatsnew-text">Course update: bigger, more varied greens, and new hazards including island greens, water carries, narrowing fairways and lakes.</span>
+        <button id="whatsnew-x" class="whatsnew-x" aria-label="Dismiss">×</button>
+      </div>
 
       <div class="creator">
         <canvas id="char-preview" width="130" height="150"></canvas>
@@ -166,14 +172,30 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <!-- "What's new" banner: shows once per update version, then dismissed. -->
+  <script>
+    (function () {
+      var VER = '2026-07-17-courses';
+      var el = document.getElementById('whatsnew');
+      if (!el) return;
+      try { if (localStorage.getItem('golf-whatsnew') === VER) return; } catch (e) {}
+      el.hidden = false;
+      var x = document.getElementById('whatsnew-x');
+      if (x) x.addEventListener('click', function () {
+        el.hidden = true;
+        try { localStorage.setItem('golf-whatsnew', VER); } catch (e) {}
+      });
+    })();
+  </script>
+
   <script src="js/config.js"></script>
   <script src="js/rng.js"></script>
   <script src="js/meta.js"></script>
   <script src="js/character.js"></script>
-  <script src="js/course.js"></script>
+  <script src="js/course.js?v=2"></script>
   <script src="js/physics.js"></script>
-  <script src="js/ambient.js"></script>
-  <script src="js/render.js"></script>
+  <script src="js/ambient.js?v=2"></script>
+  <script src="js/render.js?v=2"></script>
   <script src="js/net.js"></script>
   <script src="js/devnet.js"></script>
   <script src="js/game.js"></script>
