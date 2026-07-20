@@ -171,11 +171,11 @@
     // Greens are big and genuinely varied: a per-hole base size, aspect
     // ratio, rotation and two shape harmonics give rounds, long ovals and
     // kidneys. greenR is a conservative max-radius proxy for decor spacing.
-    var greenBase = par === 3 ? rng.range(16.5, 22.5) : par === 4 ? rng.range(19, 25.5) : rng.range(20, 28.5);
-    var greenAspect = rng.range(0.58, 1.72);
+    var greenBase = par === 3 ? rng.range(12.5, 15.5) : par === 4 ? rng.range(13.5, 16.5) : rng.range(14.5, 18);
+    var greenAspect = rng.range(0.72, 1.4);
     var greenAng = rng.next() * TAU;
-    var gH2 = rng.range(0, 0.34), gPh2 = rng.next() * TAU;
-    var gH3 = rng.range(0, 0.16), gPh3 = rng.next() * TAU;
+    var gH2 = rng.range(0, 0.22), gPh2 = rng.next() * TAU;
+    var gH3 = rng.range(0, 0.12), gPh3 = rng.next() * TAU;
     var green = { x: end.x, y: end.y };
     var greenPoly = greenBlob(rng, green.x, green.y, greenBase, greenAspect, greenAng, gH2, gPh2, gH3, gPh3, 28);
     var fringePoly = expand(greenPoly, 2.8);
@@ -334,7 +334,7 @@
         x: green.x + Math.cos(ha) * hd,
         y: green.y + Math.sin(ha) * hd,
         r: rng.range(0.35, 0.6) * greenBase,
-        amp: rng.range(0.7, 1.8) * (rng.chance(0.5) ? 1 : -1), // + mound, − swale
+        amp: rng.range(0.6, 1.4) * (rng.chance(0.5) ? 1 : -1), // + mound, − swale
       });
     }
 
@@ -703,7 +703,7 @@
       }
     }
     var m = Math.sqrt(gx * gx + gy * gy);
-    var MAX = 0.14;
+    var MAX = 0.10;
     if (m > MAX) { gx = gx / m * MAX; gy = gy / m * MAX; m = MAX; }
     return { x: gx, y: gy, mag: m };
   }

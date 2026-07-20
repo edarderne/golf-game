@@ -91,7 +91,7 @@
 
   function simulatePutt(hole, ball, shot) {
     var offGreen = ball.lie !== 'green' && ball.lie !== 'tee' && ball.lie !== 'fairway';
-    var maxDist = 42 * (offGreen ? 0.5 : 1);
+    var maxDist = 52 * (offGreen ? 0.5 : 1);
     var distTotal = maxDist * shot.power;
     var aim = shot.aim + shot.acc * 0.09; // mistimed putts push/pull
     var keys = [{ t: 0, x: ball.x, y: ball.y, h: 0 }];
@@ -145,11 +145,14 @@
       // speeds it up / slows it down.
       if (terr === 'green') {
         var slope = Course.slopeAt(hole, { x: x, y: y });
-        dx += slope.x * 0.62 * step;
-        dy += slope.y * 0.62 * step;
+        // bend the roll downhill (the break) — the visible part…
+        dx += slope.x * 0.5 * step;
+        dy += slope.y * 0.5 * step;
         var dl = Math.sqrt(dx * dx + dy * dy) || 1;
         dx /= dl; dy /= dl;
-        remaining += (dx * slope.x + dy * slope.y) * step * 10;
+        // …and let up/downhill add or shave distance, but gently, so a putt
+        // never swings tens of yards or dies short of a reachable pin.
+        remaining += (dx * slope.x + dy * slope.y) * step * 1.8;
       }
       var nx = x + dx * step, ny = y + dy * step;
       var nterr = Course.terrainAt(hole, { x: nx, y: ny });

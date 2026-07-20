@@ -1260,7 +1260,7 @@
       var c = Physics.club(selectedClub);
       if (c.id === 'putter') {
         // curved preview: simulate a putt hit hard enough to reach the pin
-        var maxPutt = 42 * (b.lie === 'green' ? 1 : 0.5);
+        var maxPutt = 52 * (b.lie === 'green' ? 1 : 0.5);
         var pw = Math.max(0.15, Math.min(1, Course.dist(b, hole().pin) * 1.05 / maxPutt));
         var sim = Physics.simulate(hole(), b, { club: 'putter', aim: aimAngle, power: pw, acc: 0 });
         aimState = { from: b, path: sim.keys, isPutt: true };
