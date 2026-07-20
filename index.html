@@ -17,7 +17,7 @@
 
       <div id="whatsnew" class="whatsnew" hidden>
         <span class="whatsnew-tag">New</span>
-        <span class="whatsnew-text">Course update: bigger, more varied greens, and new hazards including island greens, water carries, narrowing fairways and lakes.</span>
+        <span class="whatsnew-text">Tougher courses: bigger greens with real undulation (watch the putt read), a first cut and heavy rough off the fairway, and larger water hazards.</span>
         <button id="whatsnew-x" class="whatsnew-x" aria-label="Dismiss">×</button>
       </div>
 
@@ -175,7 +175,7 @@
   <!-- "What's new" banner: shows once per update version, then dismissed. -->
   <script>
     (function () {
-      var VER = '2026-07-17-courses';
+      var VER = '2026-07-20-difficulty';
       var el = document.getElementById('whatsnew');
       if (!el) return;
       try { if (localStorage.getItem('golf-whatsnew') === VER) return; } catch (e) {}
@@ -190,14 +190,14 @@
 
   <script src="js/config.js"></script>
   <script src="js/rng.js"></script>
-  <script src="js/meta.js"></script>
+  <script src="js/meta.js?v=3"></script>
   <script src="js/character.js"></script>
-  <script src="js/course.js?v=2"></script>
-  <script src="js/physics.js"></script>
+  <script src="js/course.js?v=3"></script>
+  <script src="js/physics.js?v=3"></script>
   <script src="js/ambient.js?v=2"></script>
-  <script src="js/render.js?v=2"></script>
+  <script src="js/render.js?v=3"></script>
   <script src="js/net.js"></script>
   <script src="js/devnet.js"></script>
-  <script src="js/game.js"></script>
+  <script src="js/game.js?v=3"></script>
 </body>
 </html>

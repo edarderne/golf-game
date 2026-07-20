@@ -29,10 +29,11 @@
   <canvas id="course"></canvas>
   <div id="bar"></div>
   <div id="label"></div>
-  <script src="../js/rng.js?v=5"></script>
-  <script src="../js/course.js?v=5"></script>
-  <script src="../js/ambient.js?v=5"></script>
-  <script src="../js/render.js?v=5"></script>
+  <script src="../js/rng.js?v=6"></script>
+  <script src="../js/course.js?v=6"></script>
+  <script src="../js/physics.js?v=6"></script>
+  <script src="../js/ambient.js?v=6"></script>
+  <script src="../js/render.js?v=6"></script>
   <script>
   (function () {
     'use strict';
@@ -75,7 +76,33 @@
     });
     bar.appendChild(vb);
 
+    var puttMode = false, puttState = null;
+    var pb = document.createElement('button');
+    pb.textContent = 'putt read: off';
+    pb.addEventListener('click', function () {
+      puttMode = !puttMode;
+      pb.textContent = 'putt read: ' + (puttMode ? 'on' : 'off');
+      pb.classList.toggle('active', puttMode);
+      buildPutt();
+      fitView(true);
+    });
+    bar.appendChild(pb);
+
     function h() { return found[cur].hole; }
+
+    // Fake a putt from the edge of the green to the pin so the slope grid +
+    // flowing dots can be inspected without playing a full round.
+    function buildPutt() {
+      if (!puttMode || !window.Physics) { puttState = null; return; }
+      var hole = h();
+      var toTee = Math.atan2(hole.tee.x - hole.pin.x, hole.tee.y - hole.pin.y);
+      var r = hole.greenR * 0.7;
+      var ball = { x: hole.pin.x + Math.sin(toTee) * r, y: hole.pin.y + Math.cos(toTee) * r, lie: 'green' };
+      var aim = Math.atan2(hole.pin.x - ball.x, hole.pin.y - ball.y);
+      var pw = Math.max(0.2, Math.min(1, Course.dist(ball, hole.pin) * 1.05 / 42));
+      var sim = Physics.simulate(hole, ball, { club: 'putter', aim: aim, power: pw, acc: 0 });
+      puttState = { ball: ball, aim: { from: ball, path: sim.keys, isPutt: true } };
+    }
 
     function select(f) {
       cur = f;
@@ -88,12 +115,17 @@
       document.getElementById('label').textContent =
         'feature: ' + f + '   |   par ' + h().par + '   |   islands: ' +
         (h().islands ? h().islands.length : 1) + '   |   seed ' + rec.seed + ' hole ' + (rec.idx + 1);
+      buildPutt();
     }
 
     function fitView(snap) {
       var hole = h();
-      if (view === 'overview') renderer.fitBounds(hole.bounds, 4);
-      else {
+      if (puttMode) {
+        var gr = hole.greenR * 1.7;
+        renderer.fitBounds({ minX: hole.green.x - gr, maxX: hole.green.x + gr, minY: hole.green.y - gr, maxY: hole.green.y + gr }, 4);
+      } else if (view === 'overview') {
+        renderer.fitBounds(hole.bounds, 4);
+      } else {
         var aim = Math.atan2(hole.pin.x - hole.tee.x, hole.pin.y - hole.tee.y);
         renderer.fitShot(hole.tee, aim, Math.min(hole.length * 0.8, 260));
       }
@@ -108,9 +140,13 @@
       renderer.tickCamera(dt);
       var hole = h();
       Ambient.update(dt, hole, renderer);
+      var ball = puttMode && puttState
+        ? { x: puttState.ball.x, y: puttState.ball.y, lie: 'green', strokes: 0 }
+        : { x: hole.tee.x, y: hole.tee.y, lie: 'tee', strokes: 0 };
       renderer.draw({
         hole: hole, time: now,
-        balls: { p1: { x: hole.tee.x, y: hole.tee.y, lie: 'tee', strokes: 0 } },
+        balls: { p1: ball },
+        aim: puttMode && puttState ? puttState.aim : null,
         myUid: null,
       });
     }

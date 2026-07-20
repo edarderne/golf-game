@@ -12,6 +12,7 @@
     foam: 'rgba(255,255,255,0.8)',
     sand: '#f0dfae', sandDot: 'rgba(150,120,60,0.18)', sandDotLight: 'rgba(255,250,225,0.5)',
     islandShadow: 'rgba(12,55,68,0.25)', depthRing: 'rgba(10,50,64,0.10)',
+    roughHeavy: '#6f9a3c', roughHeavyDot: 'rgba(38,70,26,0.22)',
     rough: '#95be4f', roughDot: 'rgba(60,100,40,0.18)',
     fairway: '#b9d766',
     green: '#96da70', greenHi: '#bcec8e', greenLo: '#74c258', fringe: '#abe07c',
@@ -326,9 +327,10 @@
       }
     }
 
+    // heavy rough is the island base; the fairway + first cut sit on top
     for (k = 0; k < islands.length; k++) {
       this.blobPath(islands[k].grass);
-      ctx.fillStyle = PAL.rough;
+      ctx.fillStyle = PAL.roughHeavy;
       ctx.fill();
     }
 
@@ -343,10 +345,15 @@
       ctx.fill();
     }
 
-    // fairway, clipped to land so cross-island holes show sea in the gap
+    // first cut + fairway, clipped to land so cross-island holes show sea gaps
     ctx.save();
     for (k = 0; k < islands.length; k++) this.blobPath(islands[k].grass, k > 0);
     ctx.clip();
+    if (hole.firstCutPoly) {
+      this.poly(hole.firstCutPoly);
+      ctx.fillStyle = PAL.rough;
+      ctx.fill();
+    }
     this.poly(hole.fairwayPoly);
     ctx.fillStyle = PAL.fairway;
     ctx.fill();
@@ -393,7 +400,7 @@
     ctx.fillStyle = grad;
     if (hole.greenPoly) this.blobPath(hole.greenPoly); else this.groundEllipse(hole.green, hole.greenR);
     ctx.fill();
-    this.drawSlopeArrows(hole, gdx, gdy);
+    this.drawGreenSlope(hole, state);
 
     // bunkers with a soft lip + speckle
     for (i = 0; i < hole.bunkers.length; i++) {
@@ -449,28 +456,48 @@
     if (state.aim) this.drawAim(state.aim);
   };
 
-  Renderer.prototype.drawSlopeArrows = function (hole, gdx, gdy) {
+  // Downhill arrow grid across the (undulating) green — samples Course.slopeAt
+  // on a lattice, arrow length + brightness grow with the local slope. Denser
+  // and brighter while the player is lining up a putt.
+  Renderer.prototype.drawGreenSlope = function (hole, state) {
     var ctx = this.ctx;
-    if (!hole.greenSlope || hole.greenSlope.mag < 0.005) return;
     var sc = this.cam.scale;
-    if (sc < 2.2) return;
-    var strength = Math.min(1, hole.greenSlope.mag / 0.05);
-    ctx.strokeStyle = 'rgba(255,255,255,' + (0.25 + strength * 0.35) + ')';
-    ctx.lineWidth = Math.max(1.2, sc * 0.28);
+    if (sc < 2.2 || !hole.greenPoly || !window.Course || !Course.slopeAt) return;
+    var putting = !!(state && state.aim && state.aim.isPutt);
+    var poly = hole.greenPoly;
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (var i = 0; i < poly.length; i++) {
+      var q = poly[i];
+      if (q.x < minX) minX = q.x; if (q.x > maxX) maxX = q.x;
+      if (q.y < minY) minY = q.y; if (q.y > maxY) maxY = q.y;
+    }
+    var step = Math.max(3, hole.greenR * (putting ? 0.22 : 0.32));
+    var baseAlpha = putting ? 0.55 : 0.3;
     ctx.lineCap = 'round';
-    var px = -gdy, py = gdx;
-    var gc = this.toScreen(hole.green);
-    var rpx = hole.greenR * sc;
-    var wob = Math.sin(this.time / 500) * rpx * 0.03;
-    for (var i = -1; i <= 1; i += 2) {
-      var cx = gc.x + px * i * rpx * 0.5 + gdx * (wob - rpx * 0.05);
-      var cy = gc.y + py * i * rpx * 0.5 * this.cam.tilt + gdy * (wob - rpx * 0.05);
-      var a = rpx * 0.13;
-      ctx.beginPath();
-      ctx.moveTo(cx - px * a - gdx * a, cy - py * a - gdy * a);
-      ctx.lineTo(cx + gdx * a * 0.9, cy + gdy * a * 0.9);
-      ctx.lineTo(cx + px * a - gdx * a, cy + py * a - gdy * a);
-      ctx.stroke();
+    for (var gx = minX; gx <= maxX; gx += step) {
+      for (var gy = minY; gy <= maxY; gy += step) {
+        var wp = { x: gx, y: gy };
+        if (!Course.pointInPoly(wp, poly)) continue;
+        var sl = Course.slopeAt(hole, wp);
+        if (sl.mag < 0.006) continue;
+        var dirx = sl.x / sl.mag, diry = sl.y / sl.mag;
+        var lenYd = 1.2 + sl.mag * 34;
+        var s0 = this.toScreen(wp);
+        var s1 = this.toScreen({ x: gx + dirx * lenYd, y: gy + diry * lenYd });
+        var ax = s1.x - s0.x, ay = s1.y - s0.y;
+        var al = Math.sqrt(ax * ax + ay * ay) || 1; ax /= al; ay /= al;
+        var strength = Math.min(1, sl.mag / 0.09);
+        ctx.strokeStyle = 'rgba(255,255,255,' + (baseAlpha * (0.4 + 0.6 * strength)) + ')';
+        ctx.lineWidth = Math.max(1, sc * 0.2);
+        var hs = Math.max(2.5, sc * 0.7);
+        ctx.beginPath();
+        ctx.moveTo(s0.x, s0.y);
+        ctx.lineTo(s1.x, s1.y);
+        ctx.lineTo(s1.x - ax * hs - ay * hs * 0.55, s1.y - ay * hs + ax * hs * 0.55);
+        ctx.moveTo(s1.x, s1.y);
+        ctx.lineTo(s1.x - ax * hs + ay * hs * 0.55, s1.y - ay * hs - ax * hs * 0.55);
+        ctx.stroke();
+      }
     }
   };
 
@@ -1186,6 +1213,35 @@
       ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(end.x, end.y); ctx.stroke();
     }
     ctx.setLineDash([]);
+
+    // Putt read: dots flow along the predicted line toward the hole, so the
+    // break direction and pace are easy to read.
+    if (aim.isPutt && aim.path && aim.path.length > 1) {
+      var pts = [];
+      for (var i = 0; i < aim.path.length; i++) pts.push(this.toScreen(aim.path[i]));
+      var seg = [], total = 0;
+      for (i = 1; i < pts.length; i++) {
+        var d = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+        seg.push(d); total += d;
+      }
+      var spacing = Math.max(14, this.cam.scale * 4);
+      var phase = ((this.time || 0) / 300 % 1) * spacing;
+      var dotR = Math.max(2, this.cam.scale * 0.9);
+      for (var dpos = phase; dpos < total; dpos += spacing) {
+        var acc = 0, j = 0;
+        while (j < seg.length && acc + seg[j] < dpos) { acc += seg[j]; j++; }
+        if (j >= seg.length) break;
+        var f = (dpos - acc) / (seg[j] || 1);
+        var dx = pts[j].x + (pts[j + 1].x - pts[j].x) * f;
+        var dy = pts[j].y + (pts[j + 1].y - pts[j].y) * f;
+        var fade = 1 - dpos / total;
+        ctx.beginPath();
+        ctx.arc(dx, dy, dotR, 0, TAU);
+        ctx.fillStyle = 'rgba(255,255,255,' + (0.45 + 0.45 * fade) + ')';
+        ctx.fill();
+      }
+    }
+
     ctx.strokeStyle = 'rgba(255,255,255,0.9)';
     ctx.lineWidth = 2;
     var rr = Math.max(6, this.cam.scale * 3.5);

@@ -19,9 +19,11 @@
     return CLUBS[2];
   }
 
-  // How much a lie hurts the strike (multiplies carry).
+  // How much a lie hurts the strike (multiplies carry). Two rough cuts: the
+  // first cut nips distance, the heavy/bush rough really punishes it.
   function lieFactor(lie, clubId) {
-    if (lie === 'rough') return 0.72;
+    if (lie === 'rough') return 0.82; // first cut
+    if (lie === 'heavy') return 0.55; // thick rough / bush
     if (lie === 'sand') return clubId === 'wedge' ? 0.8 : 0.5;
     return 1.0; // tee, fairway, green
   }
@@ -30,7 +32,8 @@
   function rollFactor(terr) {
     if (terr === 'green') return 1.25;
     if (terr === 'fairway') return 1.0;
-    if (terr === 'rough') return 0.35;
+    if (terr === 'rough') return 0.32; // first cut
+    if (terr === 'heavy') return 0.13; // thick rough grabs the ball
     if (terr === 'sand') return 0.08;
     return 1.0;
   }
@@ -137,15 +140,16 @@
     var step = 1.0;
     var travelled = 0;
     var total = Math.max(remaining, 0.01);
-    var slope = hole.greenSlope;
     while (remaining > 0.5) {
-      // On the green the slope bends the roll downhill and speeds/slows it.
-      if (slope && terr === 'green') {
-        dx += slope.x * 0.4 * step;
-        dy += slope.y * 0.4 * step;
+      // On the green the local slope (undulating) bends the roll downhill and
+      // speeds it up / slows it down.
+      if (terr === 'green') {
+        var slope = Course.slopeAt(hole, { x: x, y: y });
+        dx += slope.x * 0.62 * step;
+        dy += slope.y * 0.62 * step;
         var dl = Math.sqrt(dx * dx + dy * dy) || 1;
         dx /= dl; dy /= dl;
-        remaining += (dx * slope.x + dy * slope.y) * step * 7;
+        remaining += (dx * slope.x + dy * slope.y) * step * 10;
       }
       var nx = x + dx * step, ny = y + dy * step;
       var nterr = Course.terrainAt(hole, { x: nx, y: ny });

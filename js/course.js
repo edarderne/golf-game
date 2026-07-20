@@ -166,11 +166,12 @@
     for (var i = 0; i <= N; i++) line.push(bezier(tee, ctrl, end, i / N));
 
     var fairwayW = rng.range(26, 34);
+    var firstCutW = rng.range(9, 13); // band of light rough hugging the fairway
 
     // Greens are big and genuinely varied: a per-hole base size, aspect
     // ratio, rotation and two shape harmonics give rounds, long ovals and
     // kidneys. greenR is a conservative max-radius proxy for decor spacing.
-    var greenBase = par === 3 ? rng.range(11, 15) : par === 4 ? rng.range(12.5, 17) : rng.range(13.5, 19);
+    var greenBase = par === 3 ? rng.range(16.5, 22.5) : par === 4 ? rng.range(19, 25.5) : rng.range(20, 28.5);
     var greenAspect = rng.range(0.58, 1.72);
     var greenAng = rng.next() * TAU;
     var gH2 = rng.range(0, 0.34), gPh2 = rng.next() * TAU;
@@ -258,8 +259,8 @@
       var lc = bezier(tee, ctrl, end, lt);
       var ln = normalAt(line, lt);
       var lside = rng.chance(0.5) ? 1 : -1;
-      var lhalfLen = rng.range(42, 66);
-      var lhalfW = rng.range(10, 15);
+      var lhalfLen = rng.range(63, 99);
+      var lhalfW = rng.range(15, 22);
       var loff = fairwayW / 2 + rng.range(2, 8) + lhalfW;
       var lang = Math.atan2(-ln.x, ln.y); // long axis runs along the fairway
       waters.push(ellipseBlob(rng, lc.x + ln.x * loff * lside, lc.y + ln.y * loff * lside, lhalfLen, lhalfW, lang, 0.22, 26));
@@ -319,20 +320,36 @@
       }
     }
 
-    // Green slope: a constant fall direction + magnitude that bends putts.
+    // Green slope: a base fall direction/magnitude PLUS 1-2 mounds or swales
+    // so greens undulate and putts break differently across the surface.
+    // Read anywhere via Course.slopeAt(hole, p).
     var slopeAng = rng.next() * TAU;
-    var slopeMag = rng.range(0.018, 0.055);
+    var slopeMag = rng.range(0.03, 0.08);
+    var humpN = rng.int(1, 2);
+    var greenHumps = [];
+    for (var gh = 0; gh < humpN; gh++) {
+      var ha = rng.next() * TAU;
+      var hd = rng.range(0.15, 0.65) * greenBase;
+      greenHumps.push({
+        x: green.x + Math.cos(ha) * hd,
+        y: green.y + Math.sin(ha) * hd,
+        r: rng.range(0.35, 0.6) * greenBase,
+        amp: rng.range(0.7, 1.8) * (rng.chance(0.5) ? 1 : -1), // + mound, − swale
+      });
+    }
 
     var hole = {
       index: index, par: par, length: Math.round(length),
       tee: tee, green: green, greenR: greenR, pin: pin,
       greenPoly: greenPoly, fringePoly: fringePoly, greenAng: greenAng,
-      line: line, fairwayW: fairwayW,
+      line: line, fairwayW: fairwayW, firstCutW: firstCutW,
       fairwayPoly: fairwayOutline(line, fairwayW / 2),
+      firstCutPoly: fairwayOutline(line, fairwayW / 2 + firstCutW),
       islands: islands, feature: feature, narrowSide: (typeof pinch !== 'undefined' && pinch) ? pinch.side : null,
       grassPoly: grassPoly, beachPoly: beachPoly,
       waters: waters, bunkers: bunkers,
       greenSlope: { x: Math.cos(slopeAng) * slopeMag, y: Math.sin(slopeAng) * slopeMag, mag: slopeMag },
+      greenHumps: greenHumps,
       trees: [], rocks: [], statues: [], tufts: [],
       wind: { angle: rng.next() * TAU, mph: Math.round(rng.range(0, 9)) },
       bounds: polyBounds(allBeach, 14),
@@ -440,13 +457,16 @@
     return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
   }
 
+  // Both rough cuts count as "off the fairway" for decor placement.
+  function offFairwayRough(t) { return t === 'rough' || t === 'heavy'; }
+
   function scatterDecor(rng, hole) {
     var b = hole.bounds;
     var tries = 900;
     var treeVariants = ['g', 'g', 'g', 'g2', 'g2', 'o', 'y'];
     while (tries-- > 0 && hole.trees.length < 34) {
       var p = { x: rng.range(b.minX, b.maxX), y: rng.range(b.minY, b.maxY) };
-      if (terrainAt(hole, p) !== 'rough') continue;
+      if (!offFairwayRough(terrainAt(hole, p))) continue;
       if (distToPolyline(p, hole.line) < hole.fairwayW / 2 + 9) continue;
       if (dist(p, hole.green) < hole.greenR + 12) continue;
       if (dist(p, hole.tee) < 14) continue;
@@ -476,7 +496,7 @@
     tries = 200;
     while (tries-- > 0 && rocks > 0) {
       var rp = { x: rng.range(b.minX, b.maxX), y: rng.range(b.minY, b.maxY) };
-      if (terrainAt(hole, rp) !== 'rough') continue;
+      if (!offFairwayRough(terrainAt(hole, rp))) continue;
       if (distToPolyline(rp, hole.line) < hole.fairwayW / 2 + 14) continue;
       if (dist(rp, hole.green) < hole.greenR + 18) continue;
       var pieces = [];
@@ -499,7 +519,7 @@
       tries = 150;
       while (tries-- > 0) {
         var sp = { x: rng.range(b.minX, b.maxX), y: rng.range(b.minY, b.maxY) };
-        if (terrainAt(hole, sp) !== 'rough') continue;
+        if (!offFairwayRough(terrainAt(hole, sp))) continue;
         if (distToPolyline(sp, hole.line) < hole.fairwayW / 2 + 16) continue;
         if (dist(sp, hole.green) < hole.greenR + 22) continue;
         if (edgeDistance(hole, sp) < 10) continue;
@@ -510,7 +530,7 @@
           var ra = rng.next() * TAU;
           var rd = s * rng.range(1.7, 2.4);
           var rp = { x: sp.x + Math.cos(ra) * rd, y: sp.y + Math.sin(ra) * rd };
-          if (terrainAt(hole, rp) !== 'rough') continue;
+          if (!offFairwayRough(terrainAt(hole, rp))) continue;
           hole.statues.push({ x: rp.x, y: rp.y, s: rng.range(2.4, 3.6), kind: 'head', tint: rng.chance(0.3) ? 1 : 0 });
         }
         break;
@@ -520,7 +540,7 @@
     tries = 120;
     while (tries-- > 0 && lone > 0) {
       var lp = { x: rng.range(b.minX, b.maxX), y: rng.range(b.minY, b.maxY) };
-      if (terrainAt(hole, lp) !== 'rough') continue;
+      if (!offFairwayRough(terrainAt(hole, lp))) continue;
       if (distToPolyline(lp, hole.line) < hole.fairwayW / 2 + 10) continue;
       hole.statues.push({ x: lp.x, y: lp.y, s: rng.range(2.2, 3.4), kind: 'head', tint: rng.chance(0.3) ? 1 : 0 });
       lone--;
@@ -531,7 +551,7 @@
     while (tries-- > 0 && hole.tufts.length < 30) {
       var tp = { x: rng.range(b.minX, b.maxX), y: rng.range(b.minY, b.maxY) };
       var terr = terrainAt(hole, tp);
-      if (terr !== 'rough' && terr !== 'fairway') continue;
+      if (terr !== 'fairway' && !offFairwayRough(terr)) continue;
       var kind = terr === 'fairway'
         ? 'grass'
         : rng.pick(['grass', 'grass', 'grass', 'grass', 'orange', 'yellow', 'pink', 'cyan']);
@@ -541,7 +561,7 @@
     function roughSpot(minFairwayGap) {
       for (var i = 0; i < 60; i++) {
         var p = { x: rng.range(b.minX, b.maxX), y: rng.range(b.minY, b.maxY) };
-        if (terrainAt(hole, p) !== 'rough') continue;
+        if (!offFairwayRough(terrainAt(hole, p))) continue;
         if (minFairwayGap && distToPolyline(p, hole.line) < hole.fairwayW / 2 + minFairwayGap) continue;
         return p;
       }
@@ -562,7 +582,7 @@
         var ga = rng.next() * TAU;
         var gd = rng.range(6, 11);
         var gp = { x: cl.x + Math.cos(ga) * gd, y: cl.y + Math.sin(ga) * gd };
-        if (terrainAt(hole, gp) === 'rough') {
+        if (offFairwayRough(terrainAt(hole, gp))) {
           hole.tufts.push({ x: gp.x, y: gp.y, kind: 'tall', s: rng.range(1, 1.6), rot: rng.next() * TAU });
         }
       }
@@ -637,7 +657,8 @@
   }
 
   // ---------- terrain lookup ----------
-  // Returns: 'green' | 'fairway' | 'rough' | 'sand' | 'water' | 'tee'
+  // Returns: 'green' | 'fairway' | 'rough' (first cut) | 'heavy' (thick rough)
+  //          | 'sand' | 'water' | 'tee'
   function terrainAt(hole, p) {
     for (var i = 0; i < hole.waters.length; i++) {
       if (pointInPoly(p, hole.waters[i])) return 'water';
@@ -658,13 +679,39 @@
     }
     if (hole.greenPoly ? pointInPoly(p, hole.greenPoly) : dist(p, hole.green) <= hole.greenR) return 'green';
     if (dist(p, hole.tee) <= 6) return 'tee';
-    if (distToPolyline(p, hole.line) <= hole.fairwayW / 2) return 'fairway';
-    return 'rough';
+    var dLine = distToPolyline(p, hole.line);
+    if (dLine <= hole.fairwayW / 2) return 'fairway';
+    if (dLine <= hole.fairwayW / 2 + (hole.firstCutW || 0)) return 'rough';
+    return 'heavy';
+  }
+
+  // Local downhill gradient of the green at p: base tilt + mound/swale
+  // contributions. Magnitude is clamped so putts stay controllable. Pure and
+  // seeded, so physics stays deterministic across clients.
+  function slopeAt(hole, p) {
+    var s = hole.greenSlope || { x: 0, y: 0 };
+    var gx = s.x, gy = s.y;
+    var humps = hole.greenHumps;
+    if (humps) {
+      for (var i = 0; i < humps.length; i++) {
+        var h = humps[i];
+        var dx = p.x - h.x, dy = p.y - h.y;
+        var e = Math.exp(-(dx * dx + dy * dy) / (2 * h.r * h.r));
+        var k = h.amp * e / (h.r * h.r); // downhill points away from a mound
+        gx += dx * k;
+        gy += dy * k;
+      }
+    }
+    var m = Math.sqrt(gx * gx + gy * gy);
+    var MAX = 0.14;
+    if (m > MAX) { gx = gx / m * MAX; gy = gy / m * MAX; m = MAX; }
+    return { x: gx, y: gy, mag: m };
   }
 
   window.Course = {
     generate: generateCourse,
     terrainAt: terrainAt,
+    slopeAt: slopeAt,
     dist: dist,
     distToPolyline: distToPolyline,
     pointInPoly: pointInPoly,

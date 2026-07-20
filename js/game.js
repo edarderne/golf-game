@@ -1158,7 +1158,8 @@
     var b = myBall();
     var d = Math.round(Course.dist(b, h.pin));
     $('hud-dist').textContent = b.holed ? '—' : d + 'y to pin';
-    $('hud-lie').textContent = b.holed ? 'Holed!' : ('Lie: ' + (b.lie === 'tee' ? 'tee box' : b.lie));
+    var LIE_LABEL = { tee: 'tee box', rough: 'first cut', heavy: 'heavy rough', sand: 'bunker' };
+    $('hud-lie').textContent = b.holed ? 'Holed!' : ('Lie: ' + (LIE_LABEL[b.lie] || b.lie));
 
     // wind
     var w = h.wind;
@@ -1262,7 +1263,7 @@
         var maxPutt = 42 * (b.lie === 'green' ? 1 : 0.5);
         var pw = Math.max(0.15, Math.min(1, Course.dist(b, hole().pin) * 1.05 / maxPutt));
         var sim = Physics.simulate(hole(), b, { club: 'putter', aim: aimAngle, power: pw, acc: 0 });
-        aimState = { from: b, path: sim.keys };
+        aimState = { from: b, path: sim.keys, isPutt: true };
       } else {
         var reach = c.carry * Physics.lieFactor(b.lie, c.id) + c.roll * 0.5;
         aimState = {
