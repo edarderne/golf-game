@@ -967,6 +967,7 @@
     var today = Meta.dayKey();
     $('tourney-day').textContent = 'Course of the day · ' + today + ' · ' + Meta.TOURNEY_HOLES + ' holes';
     claimTrophyIfWon();
+    renderHallOfFame();
 
     var days = Meta.weekDays(today).filter(function (d) { return d <= today; });
     Promise.all(days.map(function (d) { return Net.getTournamentDay(d); })).then(function (results) {
@@ -1059,6 +1060,52 @@
         $('tourney-status').textContent = '👑 You won last week’s tournament! The golden crown is unlocked in the character creator.';
       }
     }).catch(function () {});
+  }
+
+  // ---------- hall of fame: past weekly champions ----------
+  // Derived read-only from stored tournament day data — no winner ledger, so
+  // it works retroactively for any past week that has scores.
+  var HOF_WEEKS = 4;
+
+  function fmtWeekOf(weekKey) {
+    var d = new Date(weekKey + 'T00:00:00Z');
+    var mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return d.getUTCDate() + ' ' + mon[d.getUTCMonth()] + ' ’' + String(d.getUTCFullYear()).slice(2);
+  }
+
+  function renderHallOfFame() {
+    var el = $('hall-of-fame');
+    if (!el) return;
+    if (!Net.available()) { el.innerHTML = ''; return; }
+    el.innerHTML = '<h3>🏅 Hall of Fame</h3><p class="status">Loading past champions…</p>';
+    var weeks = [];
+    for (var k = 1; k <= HOF_WEEKS; k++) weeks.push(Meta.weekDays(Meta.dayKey(-7 * k)));
+    var allDays = [];
+    weeks.forEach(function (w) { w.forEach(function (d) { allDays.push(d); }); });
+    Promise.all(allDays.map(function (d) { return Net.getTournamentDay(d); })).then(function (res) {
+      var byDay = {};
+      allDays.forEach(function (d, i) { byDay[d] = res[i]; });
+      var rows = [];
+      weeks.forEach(function (w) {
+        var dr = {}, any = false;
+        w.forEach(function (d) { dr[d] = byDay[d]; if (Object.keys(byDay[d] || {}).length) any = true; });
+        if (!any) return;
+        var st = Meta.weekStandings(dr);
+        if (st[0]) rows.push({ week: w[0], name: st[0].name, total: st[0].total, uid: st[0].uid });
+      });
+      if (!rows.length) {
+        el.innerHTML = '<h3>🏅 Hall of Fame</h3><p class="status">No past champions yet — win a week to be the first!</p>';
+        return;
+      }
+      var html = '<h3>🏅 Hall of Fame</h3><table><tr><th>Week of</th><th>Champion</th><th>Score</th></tr>';
+      rows.forEach(function (r) {
+        var cls = r.uid === myUid ? ' class="me-row"' : '';
+        html += '<tr' + cls + '><td>' + fmtWeekOf(r.week) + '</td><td>👑 ' + esc(r.name) + '</td>' +
+          '<td>' + overParText(r.total) + '</td></tr>';
+      });
+      html += '</table>';
+      el.innerHTML = html;
+    }).catch(function () { el.innerHTML = ''; });
   }
 
   // ---------- rivals leaderboard + trophy cabinet ----------

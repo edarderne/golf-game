@@ -294,6 +294,8 @@ input:focus { outline: none; border-color: var(--green); }
 .scorecard td.under { color: var(--accent); font-weight: 800; }
 .scorecard td.over { color: #5b7ba6; }
 .scorecard .me-row td { background: rgba(76, 175, 109, 0.12); }
+.scorecard h3 { font-size: 1rem; margin: 2px 0 8px; }
+.hall { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e8e0cc; }
 .trend-up { color: var(--green-dark); }
 .trend-down { color: var(--accent); }
 

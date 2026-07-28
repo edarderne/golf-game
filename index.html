@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Island Golf — play with a friend</title>
-  <link rel="stylesheet" href="css/style.css?v=2">
+  <link rel="stylesheet" href="css/style.css?v=3">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 </head>
 <body>
@@ -17,7 +17,7 @@
 
       <div id="whatsnew" class="whatsnew" hidden>
         <span class="whatsnew-tag">New</span>
-        <span class="whatsnew-text">Tougher courses: bigger greens with real undulation (watch the putt read), a first cut and heavy rough off the fairway, and larger water hazards.</span>
+        <span class="whatsnew-text">New: a Hall of Fame on the daily tournament screen showing the champions of the last few weeks.</span>
         <button id="whatsnew-x" class="whatsnew-x" aria-label="Dismiss">×</button>
       </div>
 
@@ -57,6 +57,7 @@
       <p id="tourney-status" class="status"></p>
       <button id="btn-tourney-play" class="btn primary">Play today’s course</button>
       <div id="tourney-standings" class="scorecard"></div>
+      <div id="hall-of-fame" class="scorecard hall"></div>
       <button id="btn-tourney-back" class="btn ghost">Back</button>
     </div>
   </div>
@@ -175,7 +176,7 @@
   <!-- "What's new" banner: shows once per update version, then dismissed. -->
   <script>
     (function () {
-      var VER = '2026-07-20-difficulty';
+      var VER = '2026-07-28-halloffame';
       var el = document.getElementById('whatsnew');
       if (!el) return;
       try { if (localStorage.getItem('golf-whatsnew') === VER) return; } catch (e) {}
@@ -198,6 +199,6 @@
   <script src="js/render.js?v=3"></script>
   <script src="js/net.js"></script>
   <script src="js/devnet.js"></script>
-  <script src="js/game.js?v=4"></script>
+  <script src="js/game.js?v=5"></script>
 </body>
 </html>
