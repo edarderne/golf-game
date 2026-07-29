@@ -85,6 +85,7 @@
     Net.init().then(function (uid) {
       myUid = uid;
       $('home-status').textContent = '';
+      refreshAccountUi();
       loadMyProfile();
       // auto-rejoin a live game
       var saved = REMEMBER_ROOM && localStorage.getItem('golf.room');
@@ -113,6 +114,103 @@
   function saveProfile() {
     if (!profile) return;
     Net.setProfile(profile).catch(function () {});
+  }
+
+  // ---------- account (Google sign-in) + restore ----------
+
+  function refreshAccountUi() {
+    var btn = $('btn-account'), note = $('account-note'), rest = $('btn-restore');
+    if (!btn) return;
+    if (!Net.available()) {
+      btn.style.display = 'none';
+      if (rest) rest.style.display = 'none';
+      if (note) note.textContent = '';
+      return;
+    }
+    btn.style.display = '';
+    if (rest) rest.style.display = '';
+    var acc = Net.account();
+    if (acc.anonymous) {
+      btn.textContent = 'Sign in with Google';
+      if (note) note.textContent = 'Sign in to keep your profile across devices — otherwise each device (or a browser reset) starts a fresh profile.';
+    } else {
+      btn.textContent = 'Sign out';
+      if (note) note.textContent = 'Signed in' + (acc.name ? ' as ' + esc(acc.name) : '') + ' · your profile now follows you across devices.';
+    }
+  }
+
+  function onAccountChanged(acc) {
+    if (!acc) return;
+    myUid = acc.uid;
+    profileCache = {};
+    refreshAccountUi();
+    loadMyProfile();
+  }
+
+  function handleAccountButton() {
+    if (!Net.available()) return;
+    if (Net.account().anonymous) {
+      setStatus('Opening Google sign-in…');
+      Net.startGoogleSignIn().then(function (a) {
+        setStatus('');
+        onAccountChanged(a); // popup path; the redirect path reloads the page instead
+      }).catch(function (e) {
+        if (e && e.code === 'auth/popup-closed-by-user') { setStatus(''); return; }
+        setStatus('Sign-in failed: ' + (e && e.message ? e.message : e));
+      });
+    } else {
+      if (!confirm('Sign out? This device will go back to a separate local profile until you sign in again.')) return;
+      Net.signOutToAnonymous().then(onAccountChanged).catch(function () {});
+    }
+  }
+
+  var restoreFound = null;
+
+  function openRestore() {
+    restoreFound = null;
+    $('restore-id').value = '';
+    $('restore-preview').textContent = '';
+    $('btn-restore-confirm').style.display = 'none';
+    $('overlay-restore').classList.add('show');
+  }
+
+  function findRestore() {
+    var id = ($('restore-id').value || '').trim();
+    restoreFound = null;
+    $('btn-restore-confirm').style.display = 'none';
+    if (!id) { $('restore-preview').textContent = 'Enter a profile ID first.'; return; }
+    if (id === myUid) { $('restore-preview').textContent = 'That’s already your current profile.'; return; }
+    $('restore-preview').textContent = 'Looking…';
+    Net.getProfile(id).then(function (p) {
+      if (!p) { $('restore-preview').textContent = 'No profile found with that ID.'; return; }
+      restoreFound = p;
+      var rounds = (p.stats && p.stats.rounds) || 0;
+      var tc = p.trophies ? Object.keys(p.trophies).length : 0;
+      $('restore-preview').textContent = 'Found “' + (p.name || 'Golfer') + '” — ' + rounds +
+        ' round' + (rounds === 1 ? '' : 's') + (tc ? ', 🏆' + tc : '') + '. Copy it onto your account?';
+      $('btn-restore-confirm').style.display = '';
+    }).catch(function (e) {
+      $('restore-preview').textContent = 'Could not load: ' + (e && e.message ? e.message : e);
+    });
+  }
+
+  function confirmRestore() {
+    if (!restoreFound) return;
+    // Adopt the old profile's data under the current (signed-in) uid.
+    profile = restoreFound;
+    profile.updatedAt = Date.now();
+    if (profile.char) {
+      me = profile.char;
+      if (profile.name) me.name = profile.name;
+      Character.save(me);
+      $('name-input').value = me.name || '';
+      updateCreator();
+    }
+    saveProfile();
+    updateHomeStats();
+    refreshAccountUi();
+    $('overlay-restore').classList.remove('show');
+    setStatus('Old profile restored 🎉');
   }
 
   function myHandicap() {
@@ -296,6 +394,11 @@
     $('btn-tourney-back').addEventListener('click', function () { showScreen('home'); });
     $('btn-tourney-play').addEventListener('click', playTournament);
     $('btn-leaderboard').addEventListener('click', openLeaderboard);
+    $('btn-account').addEventListener('click', handleAccountButton);
+    $('btn-restore').addEventListener('click', openRestore);
+    $('btn-restore-find').addEventListener('click', findRestore);
+    $('btn-restore-confirm').addEventListener('click', confirmRestore);
+    $('btn-restore-close').addEventListener('click', function () { $('overlay-restore').classList.remove('show'); });
     $('btn-close-leaderboard').addEventListener('click', function () {
       $('overlay-leaderboard').classList.remove('show');
     });

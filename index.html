@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Island Golf — play with a friend</title>
-  <link rel="stylesheet" href="css/style.css?v=3">
+  <link rel="stylesheet" href="css/style.css?v=4">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 </head>
 <body>
@@ -45,6 +45,11 @@
         <button id="btn-leaderboard" class="btn">📊 Rivals</button>
       </div>
       <div id="home-stats" class="status"></div>
+      <div id="account-row">
+        <button id="btn-account" class="btn small">Sign in with Google</button>
+        <button id="btn-restore" class="linkbtn">Restore an old profile</button>
+      </div>
+      <p id="account-note" class="account-note"></p>
       <div id="home-status" class="status">Connecting…</div>
     </div>
   </div>
@@ -170,6 +175,19 @@
     </div>
   </div>
 
+  <!-- restore an orphaned profile onto the current account -->
+  <div id="overlay-restore" class="overlay">
+    <div class="panel">
+      <h2>Restore an old profile</h2>
+      <p class="sub">Paste the ID of a profile to copy its stats, history and trophies onto the account you’re signed into now.</p>
+      <input id="restore-id" placeholder="Old profile ID" autocomplete="off">
+      <button id="btn-restore-find" class="btn">Find profile</button>
+      <div id="restore-preview" class="status"></div>
+      <button id="btn-restore-confirm" class="btn primary" style="display:none">Copy this profile to me</button>
+      <button id="btn-restore-close" class="btn ghost">Close</button>
+    </div>
+  </div>
+
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
@@ -197,8 +215,8 @@
   <script src="js/physics.js?v=4"></script>
   <script src="js/ambient.js?v=2"></script>
   <script src="js/render.js?v=3"></script>
-  <script src="js/net.js"></script>
+  <script src="js/net.js?v=2"></script>
   <script src="js/devnet.js"></script>
-  <script src="js/game.js?v=5"></script>
+  <script src="js/game.js?v=6"></script>
 </body>
 </html>
