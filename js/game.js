@@ -119,12 +119,13 @@
   // ---------- account (Google sign-in) + restore ----------
 
   function refreshAccountUi() {
-    var btn = $('btn-account'), note = $('account-note'), rest = $('btn-restore');
+    var btn = $('btn-account'), note = $('account-note'), rest = $('btn-restore'), banner = $('signin-banner');
     if (!btn) return;
     if (!Net.available()) {
       btn.style.display = 'none';
       if (rest) rest.style.display = 'none';
       if (note) note.textContent = '';
+      if (banner) banner.hidden = true;
       return;
     }
     btn.style.display = '';
@@ -133,9 +134,11 @@
     if (acc.anonymous) {
       btn.textContent = 'Sign in with Google';
       if (note) note.textContent = 'Sign in to keep your profile across devices — otherwise each device (or a browser reset) starts a fresh profile.';
+      if (banner) banner.hidden = false;
     } else {
       btn.textContent = 'Sign out';
       if (note) note.textContent = 'Signed in' + (acc.name ? ' as ' + esc(acc.name) : '') + ' · your profile now follows you across devices.';
+      if (banner) banner.hidden = true;
     }
   }
 
@@ -395,6 +398,7 @@
     $('btn-tourney-play').addEventListener('click', playTournament);
     $('btn-leaderboard').addEventListener('click', openLeaderboard);
     $('btn-account').addEventListener('click', handleAccountButton);
+    $('signin-banner').addEventListener('click', handleAccountButton);
     $('btn-restore').addEventListener('click', openRestore);
     $('btn-restore-find').addEventListener('click', findRestore);
     $('btn-restore-confirm').addEventListener('click', confirmRestore);

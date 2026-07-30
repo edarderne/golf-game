@@ -81,6 +81,22 @@ h2 { font-size: 1.3rem; margin-bottom: 10px; }
 .linkbtn { border: none; background: transparent; color: var(--green-dark); font: inherit; font-weight: 700; font-size: 0.82rem; cursor: pointer; text-decoration: underline; padding: 4px; }
 .account-note { font-size: 0.74rem; opacity: 0.6; margin: 6px 0 0; }
 
+/* prominent amber sign-in prompt (function over aesthetics) — shows only
+   while signed out, tapping it starts Google sign-in */
+.signin-banner {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  text-align: left; cursor: pointer;
+  background: #ffe6b0; border: 2px solid #eea23a; color: #5a3d12;
+  border-radius: 14px; padding: 11px 13px; margin: 0 0 14px;
+  font: inherit; font-size: 0.82rem; line-height: 1.34; font-weight: 600;
+  box-shadow: 0 3px 0 rgba(210,140,35,0.3);
+}
+.signin-banner[hidden] { display: none; }
+.signin-banner:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(210,140,35,0.3); }
+.signin-banner-ico { font-size: 1.25rem; flex-shrink: 0; }
+.signin-banner-txt { flex: 1; }
+.signin-banner-txt b { color: #7a4a00; }
+
 /* character creator */
 .creator { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
 #char-preview { background: #eaf3d8; border-radius: 16px; flex-shrink: 0; }
