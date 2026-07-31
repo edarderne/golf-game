@@ -29,11 +29,11 @@
   <canvas id="course"></canvas>
   <div id="bar"></div>
   <div id="label"></div>
-  <script src="../js/rng.js?v=7"></script>
-  <script src="../js/course.js?v=7"></script>
-  <script src="../js/physics.js?v=7"></script>
-  <script src="../js/ambient.js?v=7"></script>
-  <script src="../js/render.js?v=7"></script>
+  <script src="../js/rng.js?v=9"></script>
+  <script src="../js/course.js?v=9"></script>
+  <script src="../js/physics.js?v=9"></script>
+  <script src="../js/ambient.js?v=9"></script>
+  <script src="../js/render.js?v=9"></script>
   <script>
   (function () {
     'use strict';
@@ -42,7 +42,7 @@
     var view = 'overview';
 
     // Hunt seeds for one hole of each feature. generateHole tags hole.feature.
-    var WANT = ['carry', 'narrow', 'guard', 'lake', 'none'];
+    var WANT = ['dogleg', 'triple', 'carry', 'narrow', 'guard', 'lake', 'none'];
     var found = {};
     var seed = 1;
     while (Object.keys(found).length < WANT.length && seed < 4000) {

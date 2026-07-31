@@ -46,6 +46,16 @@
     };
   }
 
+  // Cubic Bézier — used for the dogleg centerline (a double control at the
+  // corner keeps the two legs straight and the turn tight).
+  function cubic(p0, c1, c2, p3, t) {
+    var mt = 1 - t, a = mt * mt * mt, b = 3 * mt * mt * t, c = 3 * mt * t * t, d = t * t * t;
+    return {
+      x: a * p0.x + b * c1.x + c * c2.x + d * p3.x,
+      y: a * p0.y + b * c1.y + c * c2.y + d * p3.y,
+    };
+  }
+
   // Blobby circle polygon (used for ponds and bunkers).
   function blob(rng, cx, cy, r, wobble, n) {
     var pts = [];
@@ -154,16 +164,44 @@
     var length = rng.range(spec.min, spec.max);
 
     var tee = { x: 0, y: 0 };
-    var bendX = par === 3 ? rng.range(-15, 15) : rng.range(-1, 1) > 0
-      ? rng.range(20, length * 0.16)
-      : -rng.range(20, length * 0.16);
-    var ctrl = { x: bendX * 1.6, y: length * rng.range(0.45, 0.6) };
-    var end = { x: bendX * rng.range(0.4, 0.9), y: length };
+
+    // Signature feature — chosen first because some reshape the centerline.
+    // carry = two islands with open sea (sometimes a classic island green);
+    // triple = three islands / two carries (rewards distance control); dogleg =
+    // a ~90° bend, cut the corner over the sea or lay up and play across;
+    // narrow = a long neck; guard = water at the green; lake = a fairway pond.
+    var feature;
+    if (par === 3) feature = rng.pick(['none', 'none', 'carry', 'guard', 'guard']);
+    else if (par === 4) feature = rng.pick(['none', 'guard', 'narrow', 'carry', 'lake', 'dogleg']);
+    else feature = rng.pick(['none', 'guard', 'narrow', 'carry', 'lake', 'dogleg', 'triple']);
+
+    // Centerline: a quadratic through `ctrl`. A dogleg puts the control point
+    // straight above the tee with the green out to one side, giving a rounded
+    // ~90° turn (up one leg, then across to the green).
+    var ctrl, end, doglegSide = 0;
+    if (feature === 'dogleg') {
+      doglegSide = rng.chance(0.5) ? 1 : -1;
+      var legUp = length * rng.range(0.5, 0.62);
+      var legAcross = length * rng.range(0.42, 0.56);
+      ctrl = { x: 0, y: legUp };
+      end = { x: doglegSide * legAcross, y: legUp * rng.range(0.94, 1.06) };
+    } else {
+      var bendX = par === 3 ? rng.range(-15, 15) : rng.range(-1, 1) > 0
+        ? rng.range(20, length * 0.16)
+        : -rng.range(20, length * 0.16);
+      ctrl = { x: bendX * 1.6, y: length * rng.range(0.45, 0.6) };
+      end = { x: bendX * rng.range(0.4, 0.9), y: length };
+    }
 
     // Sampled centerline used for fairway distance + island outline.
     var line = [];
     var N = 48;
-    for (var i = 0; i <= N; i++) line.push(bezier(tee, ctrl, end, i / N));
+    for (var i = 0; i <= N; i++) {
+      line.push(feature === 'dogleg' ? cubic(tee, ctrl, ctrl, end, i / N) : bezier(tee, ctrl, end, i / N));
+    }
+    // Point on the actual centerline at 0..1 (matches the sampled line for
+    // every feature, including the dogleg's cubic).
+    function centerAt(t) { return line[Math.max(0, Math.min(N, Math.round(t * N)))]; }
 
     var fairwayW = rng.range(26, 34);
     var firstCutW = rng.range(9, 13); // band of light rough hugging the fairway
@@ -190,16 +228,6 @@
       pin.y = green.y + (pin.y - green.y) * 0.72;
     }
 
-    // Signature hazard: at most one big feature per hole so difficulty stays
-    // fair. carry = split across two islands with open sea (sometimes a
-    // classic island green); narrow = a long one- or two-sided neck; guard =
-    // water at the green (tangent pond or a crescent wrapping part of it);
-    // lake = a long pond running alongside the fairway.
-    var feature;
-    if (par === 3) feature = rng.pick(['none', 'none', 'carry', 'guard', 'guard']);
-    else if (par === 4) feature = rng.pick(['none', 'guard', 'narrow', 'carry', 'lake']);
-    else feature = rng.pick(['none', 'guard', 'narrow', 'narrow', 'carry', 'lake']);
-
     var margin = 42 + par * 6;
     var islands = [];
     if (feature === 'carry') {
@@ -224,6 +252,20 @@
         var greenStartT = Math.min(0.9, (splitY + gapY / 2 + mB) / length + (tightIsland ? rng.range(0.05, 0.1) : 0));
         islands.push(makeIsland(rng, line, greenStartT, 1, mB, null));
       }
+    } else if (feature === 'triple') {
+      // Three islands separated by two open-sea carries — you must control
+      // distance to land each island rather than blast through them.
+      var mT = margin * 0.8;
+      var c1 = length * rng.range(0.28, 0.34); // centre of the first gap
+      var c2 = length * rng.range(0.66, 0.74); // centre of the second gap
+      var gT = rng.range(26, 36);              // each sea gap in yards
+      var i1end = Math.max(0.1, (c1 - gT / 2 - mT) / length);
+      var i2start = Math.min(0.45, (c1 + gT / 2 + mT) / length);
+      var i2end = Math.max(i2start + 0.08, (c2 - gT / 2 - mT) / length);
+      var i3start = Math.min(0.9, (c2 + gT / 2 + mT) / length);
+      islands.push(makeIsland(rng, line, 0, i1end, mT, null));
+      islands.push(makeIsland(rng, line, i2start, i2end, mT, null));
+      islands.push(makeIsland(rng, line, i3start, 1, mT, null));
     } else if (feature === 'narrow') {
       // A long neck that stays pinched for a stretch — cutting in from one
       // side (left/right) or both — so you weigh laying up short of it.
@@ -237,7 +279,10 @@
       };
       islands.push(makeIsland(rng, line, 0, 1, margin, pinch));
     } else {
-      islands.push(makeIsland(rng, line, 0, 1, margin, null));
+      // Includes dogleg — a slightly tighter margin keeps the inside of the
+      // bend from pinching where the fairway turns.
+      var m0 = feature === 'dogleg' ? margin * 0.82 : margin;
+      islands.push(makeIsland(rng, line, 0, 1, m0, null));
     }
     var grassPoly = islands[0].grass;
     var beachPoly = islands[0].beach;
@@ -256,7 +301,7 @@
     if (feature === 'lake') {
       // long pond running alongside the fairway for much of its length
       var lt = rng.range(0.42, 0.6);
-      var lc = bezier(tee, ctrl, end, lt);
+      var lc = centerAt(lt);
       var ln = normalAt(line, lt);
       var lside = rng.chance(0.5) ? 1 : -1;
       var lhalfLen = rng.range(63, 99);
@@ -281,7 +326,7 @@
       if (par >= 4 && rng.chance(0.5)) {
         // an elongated pond flanking the fairway
         var t = rng.range(0.5, 0.78);
-        var c = bezier(tee, ctrl, end, t);
+        var c = centerAt(t);
         var side = rng.chance(0.5) ? 1 : -1;
         var fn = normalAt(line, t);
         var fHalfLen = rng.range(16, 30);
@@ -292,7 +337,7 @@
       }
       if (par === 3 && rng.chance(0.45)) {
         // water carry in front of the green
-        var mid = bezier(tee, ctrl, end, 0.5);
+        var mid = centerAt(0.5);
         waters.push(blob(rng, mid.x + rng.range(-8, 8), mid.y, rng.range(15, 22), 0.3, 14));
       }
     }
@@ -310,7 +355,7 @@
     }
     if (par >= 4 && rng.chance(0.6)) {
       var bt = rng.range(0.45, 0.7);
-      var bc = bezier(tee, ctrl, end, bt);
+      var bc = centerAt(bt);
       var bn = normalAt(line, bt);
       var bside = rng.chance(0.5) ? 1 : -1;
       var boff = fairwayW / 2 + rng.range(1, 6);

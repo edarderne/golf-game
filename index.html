@@ -17,7 +17,7 @@
 
       <div id="whatsnew" class="whatsnew" hidden>
         <span class="whatsnew-tag">New</span>
-        <span class="whatsnew-text">New: a Hall of Fame on the daily tournament screen showing the champions of the last few weeks.</span>
+        <span class="whatsnew-text">New hole types: 90° doglegs (cut the corner over the water or lay up) and three-island holes that test your distance control.</span>
         <button id="whatsnew-x" class="whatsnew-x" aria-label="Dismiss">×</button>
       </div>
 
@@ -199,7 +199,7 @@
   <!-- "What's new" banner: shows once per update version, then dismissed. -->
   <script>
     (function () {
-      var VER = '2026-07-28-halloffame';
+      var VER = '2026-07-31-holetypes';
       var el = document.getElementById('whatsnew');
       if (!el) return;
       try { if (localStorage.getItem('golf-whatsnew') === VER) return; } catch (e) {}
@@ -216,7 +216,7 @@
   <script src="js/rng.js"></script>
   <script src="js/meta.js?v=3"></script>
   <script src="js/character.js"></script>
-  <script src="js/course.js?v=4"></script>
+  <script src="js/course.js?v=5"></script>
   <script src="js/physics.js?v=4"></script>
   <script src="js/ambient.js?v=2"></script>
   <script src="js/render.js?v=3"></script>
