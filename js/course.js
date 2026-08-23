@@ -325,11 +325,12 @@
         var gd = greenR + gr + rng.range(2, 4.5);
         waters.push(blob(rng, green.x + Math.cos(ga) * gd, green.y + Math.sin(ga) * gd, gr, 0.22, 14));
       }
-    } else if (feature === 'none' || feature === 'narrow') {
+    } else if (feature === 'none') {
       if (par >= 4 && rng.chance(0.55)) {
         // A water band across the fairway in the tee-shot landing zone: a
         // perfect drive carries it, anything shorter finds it, or you lay up
         // short — the distance is what makes it a real risk/reward decision.
+        // (Its own thing — narrow holes stay dry; the neck is the challenge.)
         var carryD = rng.range(190, 215);                 // yards to clear
         var t = Math.max(0.2, Math.min(0.66, carryD / length));
         var c = centerAt(t);
