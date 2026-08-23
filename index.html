@@ -17,7 +17,7 @@
 
       <div id="whatsnew" class="whatsnew" hidden>
         <span class="whatsnew-tag">New</span>
-        <span class="whatsnew-text">The tournament is now Tuesday–Friday with no penalty for missing a day, plus a champion celebration and a clearer slope grid on the greens.</span>
+        <span class="whatsnew-text">Winter courses now show up at random (snow and bare trees), plus tighter narrows, longer lakes and fairway water right in your driving line.</span>
         <button id="whatsnew-x" class="whatsnew-x" aria-label="Dismiss">×</button>
       </div>
 
@@ -210,7 +210,7 @@
   <!-- "What's new" banner: shows once per update version, then dismissed. -->
   <script>
     (function () {
-      var VER = '2026-08-04-tourney4day';
+      var VER = '2026-08-07-winter';
       var el = document.getElementById('whatsnew');
       if (!el) return;
       try { if (localStorage.getItem('golf-whatsnew') === VER) return; } catch (e) {}
@@ -227,10 +227,10 @@
   <script src="js/rng.js"></script>
   <script src="js/meta.js?v=4"></script>
   <script src="js/character.js"></script>
-  <script src="js/course.js?v=6"></script>
+  <script src="js/course.js?v=7"></script>
   <script src="js/physics.js?v=4"></script>
   <script src="js/ambient.js?v=2"></script>
-  <script src="js/render.js?v=4"></script>
+  <script src="js/render.js?v=5"></script>
   <script src="js/net.js?v=2"></script>
   <script src="js/devnet.js"></script>
   <script src="js/game.js?v=8"></script>

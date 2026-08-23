@@ -7,7 +7,8 @@
 (function () {
   'use strict';
 
-  var PAL = {
+  // Summer (default) palette.
+  var SUMMER = {
     seaTop: '#87d4d2', seaBottom: '#2e91a2',
     foam: 'rgba(255,255,255,0.8)',
     sand: '#f0dfae', sandDot: 'rgba(150,120,60,0.18)', sandDotLight: 'rgba(255,250,225,0.5)',
@@ -25,11 +26,40 @@
     pinPole: '#f6f6f2', flag: '#e6543f',
     ball: '#ffffff',
   };
+  // Winter (cosmetic only) — snow ground, icy water, frosted rock. Play is
+  // identical; fairway / first-cut / heavy stay distinct, just snow-tinted.
+  var WINTER = Object.assign({}, SUMMER, {
+    seaTop: '#a9d0da', seaBottom: '#6ea1af',
+    foam: 'rgba(255,255,255,0.9)',
+    sand: '#e9edf0', sandDot: 'rgba(120,135,145,0.14)', sandDotLight: 'rgba(255,255,255,0.65)',
+    islandShadow: 'rgba(40,60,80,0.22)', depthRing: 'rgba(30,55,80,0.10)',
+    roughHeavy: '#b4c3bb', roughHeavyDot: 'rgba(110,130,120,0.20)',
+    rough: '#ccd7d0', roughDot: 'rgba(120,140,130,0.14)',
+    fairway: '#e3e9e5',
+    green: '#d0e0d6', greenHi: '#e6f0ea', greenLo: '#bcd0c4', fringe: '#dae7df',
+    bunker: '#eef1f3', bunkerEdge: '#d3dbdf',
+    water: '#a2cdd8',
+    shadow: 'rgba(60,80,100,0.20)',
+    rockLight: '#f2f4f6', rockMid: '#dfe4e8', rockDark: '#c3cbd1', rockDarker: '#a9b3ba',
+  });
+  // Active palette, swapped per hole by applyTheme().
+  var PAL = Object.assign({}, SUMMER);
+  var THEME = 'summer';
+  function applyTheme(t) {
+    THEME = (t === 'winter') ? 'winter' : 'summer';
+    var src = THEME === 'winter' ? WINTER : SUMMER;
+    for (var k in src) PAL[k] = src[k];
+  }
 
   var PINES = [
     { light: '#b8d95f', dark: '#5f8c33' },
     { light: '#a2ce58', dark: '#4c7f38' },
     { light: '#c6dc63', dark: '#74973a' },
+  ];
+  var PINES_WINTER = [
+    { light: '#e4eeee', dark: '#a6bcbe' },
+    { light: '#d8e6e6', dark: '#9ab3b5' },
+    { light: '#eef4f2', dark: '#b3c7c4' },
   ];
   var LEAFY = {
     g:  { light: '#8cc95e', dark: '#4e8a3c' },
@@ -38,6 +68,7 @@
     y:  { light: '#d3c355', dark: '#8f822e' },
   };
   var BLADES = ['#86b34a', '#a3ca5d', '#729f3f'];
+  var BLADES_WINTER = ['#c8d3cd', '#d8e1db', '#bcc9c2'];
   var FLOWERS = {
     orange: '#f09a3e', yellow: '#ecd34f', pink: '#ef8ed0', cyan: '#66d3e2',
   };
@@ -215,6 +246,7 @@
     ctx.save();
     ctx.scale(this.dpr, this.dpr);
     this.time = state.time || 0;
+    applyTheme(hole && hole.theme);
 
     var g = ctx.createLinearGradient(0, 0, 0, this.h);
     g.addColorStop(0, PAL.seaTop);
@@ -571,8 +603,35 @@
 
   Renderer.prototype.drawTree = function (t) {
     if (t.kind === 'pine') return this.drawPine(t);
+    // Winter: deciduous + palms go bare and snow-tipped; pines stay (frosted).
+    if (THEME === 'winter') {
+      var s = this.toScreen(t);
+      return this.drawBare(s, t.r * this.cam.scale, t.rot || 0);
+    }
     if (t.kind === 'palm') return this.drawPalm(t);
     return this.drawLeafy(t);
+  };
+
+  // Bare, snow-tipped tree used for winter deciduous/palms.
+  Renderer.prototype.drawBare = function (s, r, rot) {
+    var ctx = this.ctx;
+    this.dropShadow(s.x, s.y, r * 1.1, r * 2);
+    ctx.strokeStyle = PAL.trunk;
+    ctx.lineCap = 'round';
+    var h = r * 2.0;
+    branch(s.x, s.y, -Math.PI / 2 + Math.sin(rot) * 0.18, h * 0.6, Math.max(1.8, r * 0.22), 3);
+    function branch(x, y, ang, len, wid, depth) {
+      var nx = x + Math.cos(ang) * len, ny = y + Math.sin(ang) * len;
+      ctx.lineWidth = wid;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(nx, ny); ctx.stroke();
+      if (depth <= 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.beginPath(); ctx.arc(nx, ny, Math.max(1.5, wid * 1.1), 0, TAU); ctx.fill();
+        return;
+      }
+      branch(nx, ny, ang - 0.5 - Math.sin(rot + depth) * 0.15, len * 0.66, wid * 0.62, depth - 1);
+      branch(nx, ny, ang + 0.48 + Math.cos(rot * 2 + depth) * 0.15, len * 0.62, wid * 0.62, depth - 1);
+    }
   };
 
   // Pine: separated tiers with per-tier shading, 3-4 facets each.
@@ -581,7 +640,7 @@
     var s = this.toScreen(t);
     var sc = this.cam.scale;
     var r = t.r * sc;
-    var col = PINES[t.pine || 0];
+    var col = (THEME === 'winter' ? PINES_WINTER : PINES)[t.pine || 0];
     var tiers = t.tiers || 3;
     var height = r * (0.6 + tiers * 0.95);
 
@@ -957,7 +1016,8 @@
       var off = (i - 2) * h * 0.2;
       var bend = Math.sin(tf.rot + i * 2.1) * h * 0.35 + sc * 0.1;
       var bh = h * (0.6 + 0.4 * Math.sin(tf.rot * 3 + i));
-      ctx.fillStyle = BLADES[(i + Math.floor(tf.rot * 7)) % BLADES.length];
+      var blades = THEME === 'winter' ? BLADES_WINTER : BLADES;
+      ctx.fillStyle = blades[(i + Math.floor(tf.rot * 7)) % blades.length];
       ctx.beginPath();
       ctx.moveTo(s.x + off - h * 0.09, s.y);
       ctx.lineTo(s.x + off + h * 0.09, s.y);

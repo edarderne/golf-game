@@ -151,14 +151,17 @@
   function generateCourse(seed, holeCount) {
     var seqRng = RNG.make(RNG.mix(seed, 999));
     var pars = parSequence(seqRng, holeCount);
+    // Whole-course cosmetic theme (visual only — play is identical). Seeded, so
+    // both players see the same course. ~1 in 4 rounds is a winter course.
+    var theme = RNG.make(RNG.mix(seed, 777)).next() < 0.25 ? 'winter' : 'summer';
     var holes = [];
     for (var i = 0; i < holeCount; i++) {
-      holes.push(generateHole(RNG.mix(seed, i), pars[i], i));
+      holes.push(generateHole(RNG.mix(seed, i), pars[i], i, theme));
     }
     return holes;
   }
 
-  function generateHole(seed, par, index) {
+  function generateHole(seed, par, index, theme) {
     var rng = RNG.make(seed);
     var spec = PAR_SPECS[par];
     var length = rng.range(spec.min, spec.max);
@@ -269,12 +272,12 @@
     } else if (feature === 'narrow') {
       // A long neck that stays pinched for a stretch — cutting in from one
       // side (left/right) or both — so you weigh laying up short of it.
-      var nt0 = rng.range(0.24, 0.42);
+      var nt0 = rng.range(0.20, 0.38);
       var pinch = {
         t0: nt0,
-        t1: nt0 + rng.range(0.3, 0.46),
-        sh: rng.range(0.07, 0.12),
-        f: rng.range(0.45, 0.66),
+        t1: nt0 + rng.range(0.40, 0.56), // stays pinched for longer
+        sh: rng.range(0.05, 0.09),       // tighter shoulders = sustained neck
+        f: rng.range(0.58, 0.74),        // and noticeably narrower
         side: rng.pick(['both', 'both', 'left', 'right']),
       };
       islands.push(makeIsland(rng, line, 0, 1, margin, pinch));
@@ -304,8 +307,8 @@
       var lc = centerAt(lt);
       var ln = normalAt(line, lt);
       var lside = rng.chance(0.5) ? 1 : -1;
-      var lhalfLen = rng.range(63, 99);
-      var lhalfW = rng.range(15, 22);
+      var lhalfLen = rng.range(92, 138);
+      var lhalfW = rng.range(14, 20);
       var loff = fairwayW / 2 + rng.range(2, 8) + lhalfW;
       var lang = Math.atan2(-ln.x, ln.y); // long axis runs along the fairway
       waters.push(ellipseBlob(rng, lc.x + ln.x * loff * lside, lc.y + ln.y * loff * lside, lhalfLen, lhalfW, lang, 0.22, 26));
@@ -323,17 +326,19 @@
         waters.push(blob(rng, green.x + Math.cos(ga) * gd, green.y + Math.sin(ga) * gd, gr, 0.22, 14));
       }
     } else if (feature === 'none' || feature === 'narrow') {
-      if (par >= 4 && rng.chance(0.5)) {
-        // an elongated pond flanking the fairway
-        var t = rng.range(0.5, 0.78);
+      if (par >= 4 && rng.chance(0.55)) {
+        // A water band across the fairway in the tee-shot landing zone: a
+        // perfect drive carries it, anything shorter finds it, or you lay up
+        // short — the distance is what makes it a real risk/reward decision.
+        var carryD = rng.range(190, 215);                 // yards to clear
+        var t = Math.max(0.2, Math.min(0.66, carryD / length));
         var c = centerAt(t);
-        var side = rng.chance(0.5) ? 1 : -1;
         var fn = normalAt(line, t);
-        var fHalfLen = rng.range(16, 30);
-        var fHalfW = rng.range(7, 11);
-        var off = fairwayW / 2 + rng.range(4, 12) + fHalfW;
-        var fang = Math.atan2(-fn.x, fn.y);
-        waters.push(ellipseBlob(rng, c.x + fn.x * off * side, c.y + fn.y * off * side, fHalfLen, fHalfW, fang, 0.28, 22));
+        var acrossR = fairwayW / 2 + rng.range(8, 16);    // spans the fairway
+        var alongR = rng.range(9, 15);                     // a band you carry
+        var nAng = Math.atan2(fn.y, fn.x);                 // long axis across
+        var jit = rng.range(-6, 6);
+        waters.push(ellipseBlob(rng, c.x + fn.x * jit, c.y + fn.y * jit, acrossR, alongR, nAng, 0.24, 24));
       }
       if (par === 3 && rng.chance(0.45)) {
         // water carry in front of the green
@@ -384,7 +389,7 @@
     }
 
     var hole = {
-      index: index, par: par, length: Math.round(length),
+      index: index, par: par, length: Math.round(length), theme: theme || 'summer',
       tee: tee, green: green, greenR: greenR, pin: pin,
       greenPoly: greenPoly, fringePoly: fringePoly, greenAng: greenAng,
       line: line, fairwayW: fairwayW, firstCutW: firstCutW,
