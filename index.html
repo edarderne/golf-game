@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Island Golf — play with a friend</title>
-  <link rel="stylesheet" href="css/style.css?v=5">
+  <link rel="stylesheet" href="css/style.css?v=6">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
 </head>
 <body>
@@ -17,7 +17,7 @@
 
       <div id="whatsnew" class="whatsnew" hidden>
         <span class="whatsnew-tag">New</span>
-        <span class="whatsnew-text">New hole types: 90° doglegs (cut the corner over the water or lay up) and three-island holes that test your distance control.</span>
+        <span class="whatsnew-text">The tournament is now Tuesday–Friday with no penalty for missing a day, plus a champion celebration and a clearer slope grid on the greens.</span>
         <button id="whatsnew-x" class="whatsnew-x" aria-label="Dismiss">×</button>
       </div>
 
@@ -46,7 +46,7 @@
       </div>
       <button id="btn-practice" class="btn ghost">Practice round (solo)</button>
       <div class="nav-row">
-        <button id="btn-tournament" class="btn">🏆 Daily tournament</button>
+        <button id="btn-tournament" class="btn">🏆 Tournament</button>
         <button id="btn-leaderboard" class="btn">📊 Rivals</button>
       </div>
       <div id="home-stats" class="status"></div>
@@ -62,7 +62,7 @@
   <!-- DAILY TOURNAMENT -->
   <div id="screen-tournament" class="screen">
     <div class="panel">
-      <h2>🏆 Daily Tournament</h2>
+      <h2>🏆 Tournament</h2>
       <p id="tourney-day" class="sub"></p>
       <p id="tourney-status" class="status"></p>
       <button id="btn-tourney-play" class="btn primary">Play today’s course</button>
@@ -193,13 +193,24 @@
     </div>
   </div>
 
+  <!-- tournament winner announcement (confetti + fireworks) -->
+  <div id="overlay-winner" class="overlay">
+    <canvas id="winner-fx"></canvas>
+    <div class="panel">
+      <h2>🏆 Tournament champion</h2>
+      <p id="winner-name" class="winner-name"></p>
+      <p id="winner-sub" class="sub"></p>
+      <button id="btn-winner-close" class="btn primary">Nice!</button>
+    </div>
+  </div>
+
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
   <!-- "What's new" banner: shows once per update version, then dismissed. -->
   <script>
     (function () {
-      var VER = '2026-07-31-holetypes';
+      var VER = '2026-08-04-tourney4day';
       var el = document.getElementById('whatsnew');
       if (!el) return;
       try { if (localStorage.getItem('golf-whatsnew') === VER) return; } catch (e) {}
@@ -214,14 +225,14 @@
 
   <script src="js/config.js"></script>
   <script src="js/rng.js"></script>
-  <script src="js/meta.js?v=3"></script>
+  <script src="js/meta.js?v=4"></script>
   <script src="js/character.js"></script>
-  <script src="js/course.js?v=5"></script>
+  <script src="js/course.js?v=6"></script>
   <script src="js/physics.js?v=4"></script>
   <script src="js/ambient.js?v=2"></script>
-  <script src="js/render.js?v=3"></script>
+  <script src="js/render.js?v=4"></script>
   <script src="js/net.js?v=2"></script>
   <script src="js/devnet.js"></script>
-  <script src="js/game.js?v=7"></script>
+  <script src="js/game.js?v=8"></script>
 </body>
 </html>

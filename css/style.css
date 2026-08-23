@@ -97,6 +97,11 @@ h2 { font-size: 1.3rem; margin-bottom: 10px; }
 .signin-banner-txt { flex: 1; }
 .signin-banner-txt b { color: #7a4a00; }
 
+/* tournament winner popup */
+#winner-fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+#overlay-winner .panel { position: relative; z-index: 1; }
+.winner-name { font-size: 1.55rem; font-weight: 800; margin: 6px 0 4px; }
+
 /* character creator */
 .creator { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
 #char-preview { background: #eaf3d8; border-radius: 16px; flex-shrink: 0; }

@@ -753,10 +753,29 @@
     return { x: gx, y: gy, mag: m };
   }
 
+  // Relative surface height of the green at p (for the visual slope grid only —
+  // physics uses slopeAt). Base tilt plane + mound/swale bumps; consistent with
+  // slopeAt so the mesh matches where putts actually break.
+  function greenHeight(hole, p) {
+    var s = hole.greenSlope || { x: 0, y: 0 };
+    var g = hole.green;
+    var h = -((p.x - g.x) * s.x + (p.y - g.y) * s.y); // downhill = lower
+    var humps = hole.greenHumps;
+    if (humps) {
+      for (var i = 0; i < humps.length; i++) {
+        var hp = humps[i];
+        var dx = p.x - hp.x, dy = p.y - hp.y;
+        h += hp.amp * Math.exp(-(dx * dx + dy * dy) / (2 * hp.r * hp.r));
+      }
+    }
+    return h;
+  }
+
   window.Course = {
     generate: generateCourse,
     terrainAt: terrainAt,
     slopeAt: slopeAt,
+    greenHeight: greenHeight,
     dist: dist,
     distToPolyline: distToPolyline,
     pointInPoly: pointInPoly,

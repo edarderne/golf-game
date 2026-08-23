@@ -87,6 +87,7 @@
       $('home-status').textContent = '';
       refreshAccountUi();
       loadMyProfile();
+      maybeAnnounceWinner();
       // auto-rejoin a live game
       var saved = REMEMBER_ROOM && localStorage.getItem('golf.room');
       if (saved) {
@@ -399,6 +400,10 @@
     $('btn-leaderboard').addEventListener('click', openLeaderboard);
     $('btn-account').addEventListener('click', handleAccountButton);
     $('signin-banner').addEventListener('click', handleAccountButton);
+    $('btn-winner-close').addEventListener('click', function () {
+      $('overlay-winner').classList.remove('show');
+      stopWinnerFx();
+    });
     $('btn-restore').addEventListener('click', openRestore);
     $('btn-restore-find').addEventListener('click', findRestore);
     $('btn-restore-confirm').addEventListener('click', confirmRestore);
@@ -1064,65 +1069,84 @@
     });
   }
 
-  // ---------- daily tournament ----------
+  // ---------- Tue–Fri tournament ----------
+
+  function overParText(d) {
+    return d === 0 ? 'E' : (d > 0 ? '+' + d : String(d));
+  }
+
+  // Which 4-day block to show, and whether it's live (a round is playable now).
+  function tourneyContext() {
+    var today = Meta.dayKey();
+    var dow = new Date(today + 'T00:00:00Z').getUTCDay(); // Sun0..Sat6
+    var live = dow >= 2 && dow <= 5;                      // Tue–Fri
+    // Show this week's Tue–Fri, except Monday (this week's hasn't started yet).
+    var block = (dow === 1) ? Meta.tourneyDays(Meta.shiftDay(today, -7)) : Meta.tourneyDays(today);
+    return { today: today, dow: dow, live: live, block: block };
+  }
+
+  // The most recently COMPLETED block (for the crown claim + winner popup).
+  function lastCompletedBlock() {
+    var today = Meta.dayKey();
+    var dow = new Date(today + 'T00:00:00Z').getUTCDay();
+    return (dow === 0 || dow === 6) ? Meta.tourneyDays(today) : Meta.tourneyDays(Meta.shiftDay(today, -7));
+  }
 
   function openTournament() {
     showScreen('tournament');
     $('tourney-status').textContent = 'Loading…';
     $('tourney-standings').innerHTML = '';
     $('btn-tourney-play').style.display = 'none';
-    var today = Meta.dayKey();
-    $('tourney-day').textContent = 'Course of the day · ' + today + ' · ' + Meta.TOURNEY_HOLES + ' holes';
+    var ctx = tourneyContext();
+    var today = ctx.today;
+    $('tourney-day').textContent = ctx.live
+      ? 'Tournament · Tue–Fri · today ' + today + ' · ' + Meta.TOURNEY_HOLES + ' holes'
+      : 'Tournament · Tue–Fri · ' + ctx.block[0] + ' → ' + ctx.block[3];
     claimTrophyIfWon();
-    renderHallOfFame();
+    renderHallOfFame(ctx.block[0]);
 
-    var days = Meta.weekDays(today).filter(function (d) { return d <= today; });
+    var days = ctx.live ? ctx.block.filter(function (d) { return d <= today; }) : ctx.block;
     Promise.all(days.map(function (d) { return Net.getTournamentDay(d); })).then(function (results) {
       var dayResults = {};
       days.forEach(function (d, i) { dayResults[d] = results[i]; });
-      var mine = dayResults[today] && dayResults[today][myUid];
-      if (mine) {
-        $('tourney-status').textContent =
-          'You shot ' + mine.strokes + ' (' + overParText(mine.strokes - mine.par) + ') today. New course ' + nextDropText() + '.';
+      if (ctx.live) {
+        var mine = dayResults[today] && dayResults[today][myUid];
+        if (mine) {
+          $('tourney-status').textContent =
+            'You shot ' + mine.strokes + ' (' + overParText(mine.strokes - mine.par) + ') today. Next round tomorrow.';
+        } else {
+          $('tourney-status').textContent = 'Today’s round is open — one attempt, make it count!';
+          $('btn-tourney-play').style.display = '';
+        }
       } else {
-        $('tourney-status').textContent = 'You haven’t played today’s course yet. One attempt only — make it count!';
-        $('btn-tourney-play').style.display = '';
+        $('tourney-status').textContent = ctx.dow === 1
+          ? 'The next tournament starts tomorrow (Tuesday).'
+          : 'This week’s tournament is over. The next runs Tuesday–Friday.';
       }
-      renderStandings(dayResults, days.length);
+      renderStandings(dayResults, days.length, ctx.live);
     }).catch(function (e) {
       $('tourney-status').textContent = 'Could not load the tournament: ' + e.message;
     });
   }
 
-  function overParText(d) {
-    return d === 0 ? 'E' : (d > 0 ? '+' + d : String(d));
-  }
-
-  function nextDropText() {
-    var now = new Date();
-    var next = new Date(now);
-    next.setUTCHours(24, 0, 0, 0);
-    var mins = Math.round((next - now) / 60000);
-    return 'in ' + (mins >= 60 ? Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm' : mins + 'm');
-  }
-
-  function renderStandings(dayResults, playedDays) {
+  function renderStandings(dayResults, elapsed, live) {
     var list = Meta.weekStandings(dayResults);
     var el = $('tourney-standings');
     if (!list.length) {
-      el.innerHTML = '<p class="status">No one has played this week yet — be the first!</p>';
+      el.innerHTML = '<p class="status">No scores yet — be the first!</p>';
       return;
     }
-    var html = '<table><tr><th></th><th>Player</th><th>Days</th><th>Total</th></tr>';
+    var html = '<table><tr><th></th><th>Player</th><th>Rounds</th><th>Total</th></tr>';
     list.forEach(function (p, i) {
       var cls = p.uid === myUid ? ' class="me-row"' : '';
       html += '<tr' + cls + '><td>' + (i + 1) + '</td><td>' + esc(p.name) + '</td>' +
-        '<td>' + p.played + '/' + playedDays + '</td>' +
+        '<td>' + p.played + '/' + elapsed + '</td>' +
         '<td><b>' + overParText(p.total) + '</b></td></tr>';
     });
     html += '</table>';
-    html += '<p class="status">Missed days count as +' + Meta.MISSED_DAY_PENALTY +
-      '. Week ends Sunday — the winner earns the golden crown 👑</p>';
+    html += '<p class="status">' + (live
+      ? 'Best total over Tue–Fri wins the 👑 — and missing a day no longer adds any strokes.'
+      : 'Final standings — the 👑 goes to the winner.') + '</p>';
     el.innerHTML = html;
   }
 
@@ -1144,16 +1168,16 @@
       });
   }
 
-  // After a week ends, the winner claims the crown on their next visit.
+  // After the block ends, the winner claims the crown on their next visit.
   function claimTrophyIfWon() {
     if (!profile) return;
-    var lastWeek = Meta.weekDays(Meta.dayKey(-7));
-    var weekKey = lastWeek[0];
+    var block = lastCompletedBlock();
+    var weekKey = block[0];
     if (profile.trophies && profile.trophies[weekKey]) return;
-    Promise.all(lastWeek.map(function (d) { return Net.getTournamentDay(d); })).then(function (results) {
+    Promise.all(block.map(function (d) { return Net.getTournamentDay(d); })).then(function (results) {
       var dayResults = {};
       var any = false;
-      lastWeek.forEach(function (d, i) {
+      block.forEach(function (d, i) {
         dayResults[d] = results[i];
         if (Object.keys(results[i] || {}).length) any = true;
       });
@@ -1164,14 +1188,95 @@
         profile.trophies[weekKey] = { item: 'crown', ts: Date.now() };
         saveProfile();
         updateHomeStats();
-        $('tourney-status').textContent = '👑 You won last week’s tournament! The golden crown is unlocked in the character creator.';
       }
     }).catch(function () {});
   }
 
-  // ---------- hall of fame: past weekly champions ----------
-  // Derived read-only from stored tournament day data — no winner ledger, so
-  // it works retroactively for any past week that has scores.
+  // ---------- winner announcement (confetti + fireworks) ----------
+  // Shown once, the first time you open the app after a tournament finishes.
+  function maybeAnnounceWinner() {
+    if (!Net.available()) return;
+    var block = lastCompletedBlock();
+    var key = block[0];
+    var seen = null;
+    try { seen = localStorage.getItem('golf.seenWinner'); } catch (e) {}
+    if (seen === key) return; // only fetch/announce once per finished block
+    Promise.all(block.map(function (d) { return Net.getTournamentDay(d); })).then(function (res) {
+      var dr = {}, any = false;
+      block.forEach(function (d, i) { dr[d] = res[i]; if (Object.keys(res[i] || {}).length) any = true; });
+      try { localStorage.setItem('golf.seenWinner', key); } catch (e) {}
+      if (!any) return;
+      var st = Meta.weekStandings(dr);
+      if (st[0]) showWinner(st[0]);
+    }).catch(function () {});
+  }
+
+  function showWinner(w) {
+    var mine = w.uid === myUid;
+    $('winner-name').textContent = '👑 ' + w.name;
+    $('winner-sub').textContent = (mine ? 'That’s you — you won the tournament!' : 'won the weekly tournament')
+      + ' · ' + overParText(w.total) + ' over Tue–Fri.';
+    $('overlay-winner').classList.add('show');
+    startWinnerFx();
+  }
+
+  // Self-contained confetti + fireworks on the winner overlay canvas.
+  var winnerFx = null;
+  function startWinnerFx() {
+    var cv = $('winner-fx');
+    if (!cv) return;
+    var ctx = cv.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
+    var colors = ['#e6543f', '#4caf6d', '#ffd24a', '#5b9bd5', '#f0a93a', '#ffffff'];
+    var confetti = [], sparks = [], lastBurst = 0;
+    function newConfetto() {
+      return { x: Math.random() * cv.width, y: -Math.random() * cv.height,
+        vx: (Math.random() - 0.5) * 0.9 * dpr, vy: (1 + Math.random() * 2.2) * dpr,
+        s: (4 + Math.random() * 6) * dpr, a: Math.random() * Math.PI, va: (Math.random() - 0.5) * 0.3,
+        c: colors[(Math.random() * colors.length) | 0] };
+    }
+    for (var i = 0; i < 150; i++) confetti.push(newConfetto());
+    function burst() {
+      var cx = Math.random() * cv.width, cy = (0.15 + Math.random() * 0.4) * cv.height;
+      var col = colors[(Math.random() * colors.length) | 0], n = 44;
+      for (var i = 0; i < n; i++) {
+        var a = (i / n) * Math.PI * 2, sp = (1.4 + Math.random() * 2.6) * dpr;
+        sparks.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, c: col });
+      }
+    }
+    function frame(now) {
+      if (!winnerFx) return;
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      for (var i = 0; i < confetti.length; i++) {
+        var p = confetti[i];
+        p.x += p.vx; p.y += p.vy; p.a += p.va;
+        if (p.y > cv.height + 20) { confetti[i] = newConfetto(); confetti[i].y = -10; }
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a);
+        ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.6); ctx.restore();
+      }
+      if (now - lastBurst > 650) { burst(); lastBurst = now; }
+      for (i = sparks.length - 1; i >= 0; i--) {
+        var s = sparks[i];
+        s.x += s.vx; s.y += s.vy; s.vy += 0.03 * dpr; s.life -= 0.012;
+        if (s.life <= 0) { sparks.splice(i, 1); continue; }
+        ctx.globalAlpha = Math.max(0, s.life);
+        ctx.fillStyle = s.c;
+        ctx.beginPath(); ctx.arc(s.x, s.y, 2.6 * dpr, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      winnerFx = requestAnimationFrame(frame);
+    }
+    winnerFx = requestAnimationFrame(frame);
+  }
+  function stopWinnerFx() {
+    if (winnerFx) cancelAnimationFrame(winnerFx);
+    winnerFx = null;
+    var cv = $('winner-fx');
+    if (cv) { var c = cv.getContext('2d'); c.clearRect(0, 0, cv.width, cv.height); }
+  }
+
+  // ---------- hall of fame: past champions ----------
   var HOF_WEEKS = 4;
 
   function fmtWeekOf(weekKey) {
@@ -1180,20 +1285,20 @@
     return d.getUTCDate() + ' ' + mon[d.getUTCMonth()] + ' ’' + String(d.getUTCFullYear()).slice(2);
   }
 
-  function renderHallOfFame() {
+  function renderHallOfFame(anchorTuesday) {
     var el = $('hall-of-fame');
     if (!el) return;
     if (!Net.available()) { el.innerHTML = ''; return; }
     el.innerHTML = '<h3>🏅 Hall of Fame</h3><p class="status">Loading past champions…</p>';
-    var weeks = [];
-    for (var k = 1; k <= HOF_WEEKS; k++) weeks.push(Meta.weekDays(Meta.dayKey(-7 * k)));
+    var blocks = [];
+    for (var k = 1; k <= HOF_WEEKS; k++) blocks.push(Meta.tourneyDays(Meta.shiftDay(anchorTuesday, -7 * k)));
     var allDays = [];
-    weeks.forEach(function (w) { w.forEach(function (d) { allDays.push(d); }); });
+    blocks.forEach(function (w) { w.forEach(function (d) { allDays.push(d); }); });
     Promise.all(allDays.map(function (d) { return Net.getTournamentDay(d); })).then(function (res) {
       var byDay = {};
       allDays.forEach(function (d, i) { byDay[d] = res[i]; });
       var rows = [];
-      weeks.forEach(function (w) {
+      blocks.forEach(function (w) {
         var dr = {}, any = false;
         w.forEach(function (d) { dr[d] = byDay[d]; if (Object.keys(byDay[d] || {}).length) any = true; });
         if (!any) return;
@@ -1413,10 +1518,9 @@
       var b = myBall();
       var c = Physics.club(selectedClub);
       if (c.id === 'putter') {
-        // curved preview: simulate a putt hit hard enough to reach the pin
-        var maxPutt = 52 * (b.lie === 'green' ? 1 : 0.5);
-        var pw = Math.max(0.15, Math.min(1, Course.dist(b, hole().pin) * 1.05 / maxPutt));
-        var sim = Physics.simulate(hole(), b, { club: 'putter', aim: aimAngle, power: pw, acc: 0 });
+        // Always show the full max-power line (like the other clubs) so power is
+        // judged against a fixed reach, not a line that snaps to the pin.
+        var sim = Physics.simulate(hole(), b, { club: 'putter', aim: aimAngle, power: 1, acc: 0 });
         aimState = { from: b, path: sim.keys, isPutt: true };
       } else {
         var reach = c.carry * Physics.lieFactor(b.lie, c.id) + c.roll * 0.5;
@@ -1458,6 +1562,7 @@
     state: function () {
       return { phase: phase, holeIndex: holeIndex(), cam: renderer && renderer.cam, target: renderer && renderer.target, hole: hole() };
     },
+    showWinner: function (w) { showWinner(w || { name: 'Ed', uid: myUid, total: -3 }); },
   };
 
   boot();

@@ -456,13 +456,14 @@
     if (state.aim) this.drawAim(state.aim);
   };
 
-  // Downhill arrow grid across the (undulating) green — samples Course.slopeAt
-  // on a lattice, arrow length + brightness grow with the local slope. Denser
-  // and brighter while the player is lining up a putt.
+  // Green slope grid: a square mesh laid over the green, each node lifted by
+  // the surface height so it bulges over mounds and dips into swales — you read
+  // the break from how the grid warps (like a contour mesh). Colours unchanged;
+  // brighter/denser while lining up a putt.
   Renderer.prototype.drawGreenSlope = function (hole, state) {
     var ctx = this.ctx;
     var sc = this.cam.scale;
-    if (sc < 2.2 || !hole.greenPoly || !window.Course || !Course.slopeAt) return;
+    if (sc < 2.4 || !hole.greenPoly || !window.Course || !Course.greenHeight) return;
     var putting = !!(state && state.aim && state.aim.isPutt);
     var poly = hole.greenPoly;
     var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -471,34 +472,49 @@
       if (q.x < minX) minX = q.x; if (q.x > maxX) maxX = q.x;
       if (q.y < minY) minY = q.y; if (q.y > maxY) maxY = q.y;
     }
-    var step = Math.max(3, hole.greenR * (putting ? 0.22 : 0.32));
-    var baseAlpha = putting ? 0.55 : 0.3;
-    ctx.lineCap = 'round';
-    for (var gx = minX; gx <= maxX; gx += step) {
-      for (var gy = minY; gy <= maxY; gy += step) {
-        var wp = { x: gx, y: gy };
-        if (!Course.pointInPoly(wp, poly)) continue;
-        var sl = Course.slopeAt(hole, wp);
-        if (sl.mag < 0.006) continue;
-        var dirx = sl.x / sl.mag, diry = sl.y / sl.mag;
-        var lenYd = 1.2 + sl.mag * 34;
-        var s0 = this.toScreen(wp);
-        var s1 = this.toScreen({ x: gx + dirx * lenYd, y: gy + diry * lenYd });
-        var ax = s1.x - s0.x, ay = s1.y - s0.y;
-        var al = Math.sqrt(ax * ax + ay * ay) || 1; ax /= al; ay /= al;
-        var strength = Math.min(1, sl.mag / 0.09);
-        ctx.strokeStyle = 'rgba(255,255,255,' + (baseAlpha * (0.4 + 0.6 * strength)) + ')';
-        ctx.lineWidth = Math.max(1, sc * 0.2);
-        var hs = Math.max(2.5, sc * 0.7);
-        ctx.beginPath();
-        ctx.moveTo(s0.x, s0.y);
-        ctx.lineTo(s1.x, s1.y);
-        ctx.lineTo(s1.x - ax * hs - ay * hs * 0.55, s1.y - ay * hs + ax * hs * 0.55);
-        ctx.moveTo(s1.x, s1.y);
-        ctx.lineTo(s1.x - ax * hs + ay * hs * 0.55, s1.y - ay * hs - ax * hs * 0.55);
-        ctx.stroke();
+    var step = Math.max(2.4, hole.greenR * 0.15);
+    var lift = sc * (putting ? 1.8 : 1.3);
+    // Build a node grid that overshoots the green by one cell on every side, so
+    // once we clip to the green the mesh fills right up to the edge.
+    var x0 = minX - step, y0 = minY - step;
+    var cols = Math.ceil((maxX + step - x0) / step) + 1;
+    var rows = Math.ceil((maxY + step - y0) / step) + 1;
+    var nodes = [];
+    for (var r = 0; r < rows; r++) {
+      nodes[r] = [];
+      for (var c = 0; c < cols; c++) {
+        var wp = { x: x0 + c * step, y: y0 + r * step };
+        var s = this.toScreen(wp);
+        nodes[r][c] = { x: s.x, y: s.y - Course.greenHeight(hole, wp) * lift };
       }
     }
+    // Clip to the exact green outline, then draw the whole grid — the outline
+    // cuts the blocks off cleanly at the edge (graph-paper-in-the-green look).
+    ctx.save();
+    this.blobPath(poly);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,' + (putting ? 0.5 : 0.32) + ')';
+    ctx.lineWidth = Math.max(0.7, sc * 0.12);
+    ctx.beginPath();
+    for (r = 0; r < rows; r++) {
+      for (c = 0; c < cols - 1; c++) {
+        var a = nodes[r][c], b = nodes[r][c + 1];
+        ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+      }
+    }
+    for (c = 0; c < cols; c++) {
+      for (r = 0; r < rows - 1; r++) {
+        var a2 = nodes[r][c], b2 = nodes[r + 1][c];
+        ctx.moveTo(a2.x, a2.y); ctx.lineTo(b2.x, b2.y);
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+    // Boundary line around the green that contains the grid.
+    this.blobPath(poly);
+    ctx.strokeStyle = 'rgba(255,255,255,' + (putting ? 0.85 : 0.55) + ')';
+    ctx.lineWidth = Math.max(1.2, sc * 0.22);
+    ctx.stroke();
   };
 
   // ---------- depth-sorted entities ----------

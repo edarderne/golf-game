@@ -98,9 +98,31 @@
     return days;
   }
 
-  // Over-par charged for a skipped day. Kept above a typical round so playing
-  // always beats skipping, but low enough that one missed day is catchable.
-  var MISSED_DAY_PENALTY = 20;
+  // Shift a dayKey by n days.
+  function shiftDay(dayKey, n) {
+    var d = new Date(dayKey + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  // The tournament runs Tuesday–Friday (PGA-style). Returns those 4 day-keys
+  // for the week containing `anchor`.
+  var TOURNEY_DAYS = 4;
+  function tourneyDays(anchor) {
+    var d = new Date(anchor + 'T00:00:00Z');
+    var dow = (d.getUTCDay() + 6) % 7;   // Mon=0
+    d.setUTCDate(d.getUTCDate() - dow + 1); // Tuesday
+    var days = [];
+    for (var i = 0; i < TOURNEY_DAYS; i++) {
+      days.push(d.toISOString().slice(0, 10));
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+    return days;
+  }
+
+  // No penalty for missing a day — your score is just your accumulated
+  // over-par across the rounds you played, so a missed day never sets you back.
+  var MISSED_DAY_PENALTY = 0;
 
   // dayResults: {day: {uid: {name, strokes, par}}}. Returns sorted standings.
   function weekStandings(dayResults) {
@@ -134,6 +156,9 @@
     dayKey: dayKey,
     daySeed: daySeed,
     weekDays: weekDays,
+    shiftDay: shiftDay,
+    tourneyDays: tourneyDays,
+    TOURNEY_DAYS: TOURNEY_DAYS,
     weekStandings: weekStandings,
     MISSED_DAY_PENALTY: MISSED_DAY_PENALTY,
     TOURNEY_HOLES: 9,
